@@ -1,4 +1,5 @@
 #Visit data
+
 fit <- glm(formula= ARW_NetComplexity ~  factor(Procedure) +  factor(Diagnosis_group) + factor(Clinic)
           + Action_count + Role_count + Workstation_count, data=visits)
 
