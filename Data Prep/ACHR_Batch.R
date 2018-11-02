@@ -13,6 +13,11 @@ library(ngram)
 library(lubridate)
 library(expss)
 
+make_ACHR_tables <- function() {
+  
+  library(dplyr)
+  library(expss)
+  
 cd = apply_labels(clinic_days,
                   Clinic_date =  'ClinicDate',
                   YMD_date = 'Date',
@@ -27,46 +32,51 @@ cd = apply_labels(clinic_days,
                   Weekday  = 'Weekday', 
                   Month  = 'Month')
 
-cd %>% 
+expss_output_viewer()
+
+
+clinic_days %>% 
   tab_cells(NetComplexity,NumVisits,NEvents/NumVisits,NumUniqueProcedures,NumUniqueDiagnosisGroups,
             NumUniqueProcedures/NumVisits,NumUniqueDiagnosisGroups/NumVisits) %>% 
   tab_cols(total(), Clinic) %>% 
   tab_stat_mean() %>% 
   tab_pivot()
 
-cd %>% 
+clinic_days %>% 
   tab_cells(Weekday) %>% 
   tab_cols(total(), Clinic) %>% 
   tab_stat_cases() %>% 
   tab_pivot()
 
 
-v %>% 
+visits %>% 
   tab_cells( NEvents, VisitDuration, NetComplexity, CompressRatio, Action_count, Workstation_count, Role_count ) %>% 
   tab_cols(total(), Clinic) %>% 
   tab_stat_mean() %>% 
   tab_pivot()
 
-b %>% 
+visits %>% 
   tab_cells( NEvents, VisitDuration, NetComplexity,  Action_count, Workstation_count, Role_count ) %>% 
   tab_cols(total(), Diagnosis_group) %>% 
   tab_stat_mean() %>% 
   tab_pivot() %>% 
   tab_transpose()
 
-b %>% 
+visits %>% 
   tab_cells(  NEvents, VisitDuration, NetComplexity,  Action_count ) %>% 
   tab_cols(total(), Diagnosis_group) %>% 
   tab_stat_mean_sd_n() %>% 
   tab_pivot() %>% 
   tab_transpose()
 
-b %>% 
-  tab_cells( NEvents, VisitDuration, NetComplexity,   Action_count  ) %>% 
+visits %>% 
+  tab_cells( NEvents, VisitDuration, A_NetComplexity,   Action_count  ) %>% 
   tab_cols(total(), Physician) %>% 
   tab_stat_mean_sd_n() %>% 
   tab_pivot() %>% 
   tab_transpose()
+
+}
 
 
 read_ACHR_data <- function(){
