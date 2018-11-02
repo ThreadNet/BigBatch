@@ -6,7 +6,6 @@
 # Absolutely no warranty!
 ##########################################################################################################
 
-
 # these functions will take clinic data and produce trajectories (distance of the graph from a reference graph)
 
 # start with auditfinal_10022018.csv --> use ACHR_Batch_v2 to make new_occ.  
