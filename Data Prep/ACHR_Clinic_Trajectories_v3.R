@@ -1,3 +1,11 @@
+##########################################################################################################
+# THREADNET:  Batch processing for larger data sets
+
+# (c) 2017 Michigan State University. This software may be used according to the terms provided in the
+# GNU General Public License (GPL-3.0) https://opensource.org/licenses/GPL-3.0?
+# Absolutely no warranty!
+##########################################################################################################
+
 
 # these functions will take clinic data and produce trajectories (distance of the graph from a reference graph)
 
@@ -50,11 +58,10 @@ get_bucket <- function(o, b ){
 
 
 
-#' @param e data frame for POV
-#' @param blist is the bucket list.  Each bucket is a "window"
-#' @param cf is the column that defines events (e.g. 'Action_Role')
-#' @param filter list contains the threshold levels for filtering out edges with low frequency: c(0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1)
-#' @export
+# @param e data frame for POV
+# @param blist is the bucket list.  Each bucket is a "window"
+# @param cf is the column that defines events (e.g. 'Action_Role')
+# @param filter list contains the threshold levels for filtering out edges with low frequency: c(0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1)
 graph_trajectory_filtered  <- function(e, cf, reference_day=1, filter_list,save_file_name) {
   
   # get total size of possible matrix
@@ -160,38 +167,26 @@ graph_trajectory_filtered  <- function(e, cf, reference_day=1, filter_list,save_
                                             function(i){ estimate_task_complexity_index( nodes ,sum(windowFreqMatrix[i,] > 0) ) })) ,
                  Dist_from_reference= unlist(lapply(1:(nWindows-1),
                                                 function(i){distance(rbind(windowFreqMatrix[i,],windowFreqMatrix[reference_day,]),
-                                                                     method='cosine' ) }))
-                 # ,
-                 # Dist_from_next= unlist(lapply(1:(nWindows-1),
-                 #                                function(i){distance(rbind(windowFreqMatrix[i,],windowFreqMatrix[i+1,]),
-                 #                                                     method='cosine' ) }))
+                                                                     method='cosine' ) })),
+                  Dist_from_next= unlist(lapply(1:(nWindows-1),
+                                                 function(i){distance(rbind(windowFreqMatrix[i,],windowFreqMatrix[i+1,]),
+                                                                      method='cosine' ) }))
                  )
   
   save(df, file=paste0(save_file_name,f,'.rData') )
   
   }  # f in filter list
   
-# return(df)
+ return(df)
   
   # get the ngram data and labels
-  b_df=as.data.frame(windowFreqMatrix[1:(nWindows-1),])
-  colnames(b_df)=vt_unique$ngrams
-
-  # stick the ngram frequencies on the end for good measure
-  return(cbind(df,b_df))
+  # b_df=as.data.frame(windowFreqMatrix[1:(nWindows-1),])
+  # colnames(b_df)=vt_unique$ngrams
+  # 
+  # # stick the ngram frequencies on the end for good measure
+  # return(cbind(df,b_df))
 
 }
 
 
-plots_for_papers <- function(){
-  
-  # compare the complexity of the five clinics
-  plot(cds$Clinic.x,cds$A_NetComplexity)
-  
-  # Clinic change over time, with and without smoothing
-  ggplot(data = df0, aes(x = ymd, y = corr_with_first, group=Clinic)) + geom_line(aes(color=Clinic))
-  ggplot(data = df0, aes(x = ymd, y = rollmean(corr_with_first,5,na.pad=TRUE), group=Clinic)) + geom_line(aes(color=Clinic))
- 
-  
-}
  

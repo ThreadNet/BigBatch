@@ -6,73 +6,34 @@
 # Absolutely no warranty!
 ##########################################################################################################
 
-doit <-  function(){
-cd = apply_labels(clinic_days,
-                  Clinic_date =  'ClinicDate',
-                  YMD_date = 'Date',
-                  NEvents = 'Num Steps',
-                  NumVisits = 'Num Visits',
-                  CompressRatio = 'Compressibility',
-                  Clinic = 'Clinic',
-                  NumUniqueProcedures = 'Num Unique Procedures',
-                  NumUniqueDiagnosisGroups  = 'Num Unique Diagnosis Groups', 
-                  NumPhysicians  = 'Num Physicians', 
-                  Weekday  = 'Weekday', 
-                  Month  = 'Month')
 
-cd %>% 
-  tab_cells(A_NetComplexity,NumVisits,NEvents/NumVisits,NumUniqueProcedures,NumUniqueDiagnosisGroups,
-            NumUniqueProcedures/NumVisits,NumUniqueDiagnosisGroups/NumVisits) %>% 
-  tab_cols(total(), Clinic) %>% 
-  tab_stat_mean() %>% 
-  tab_pivot()
+### v2 is good for whole visits as threads
+### v3 has Visit_role 
 
-cd %>% 
-  tab_cells(Weekday) %>% 
-  tab_cols(total(), Clinic) %>% 
-  tab_stat_cases() %>% 
-  tab_pivot()
+# TO DO: 
+# Needs to create visit_role
+# Counting procedures
+# CPT_levels and new patients
+
+#  Converting procedure codes into CPT complexity level and New Patient
+# no$CPT_Level=integer(nrow(no))
+# no$New_Patient=integer(nrow(no))
+# no[grep('99211',no$Proc),'CPT_Level']=1
+# no[grep('99212',no$Proc),'CPT_Level']=2
+# no[grep('99213',no$Proc),'CPT_Level']=3
+# no[grep('99214',no$Proc),'CPT_Level']=4
+# no[grep('99215',no$Proc),'CPT_Level']=5
+# no[grep('99205',no$Proc),'CPT_Level']=5
+# no[grep('99204',no$Proc),'CPT_Level']=4
+# no[grep('99203',no$Proc),'CPT_Level']=3
+# no[grep('99202',no$Proc),'CPT_Level']=2
+# no[grep('99201',no$Proc),'CPT_Level']=1
+# no[grep('9920',no$Proc),'New_Patient']=1
+# no[grep('9921',no$Proc),'New_Patient']=0
 
 
-b %>% 
-  tab_cells( NEvents, VisitDuration, A_NetComplexity, CompressRatio, Action_count, Workstation_count, Role_count ) %>% 
-  tab_cols(total(), Clinic) %>% 
-  tab_stat_mean() %>% 
-  tab_pivot()
 
-b %>% 
-  tab_cells( NEvents, VisitDuration, A_NetComplexity,  Action_count, Workstation_count, Role_count ) %>% 
-  tab_cols(total(), Diagnosis_group) %>% 
-  tab_stat_mean() %>% 
-  tab_pivot() %>% 
-  tab_transpose()
-
-b %>% 
-  tab_cells(  NEvents, VisitDuration, A_NetComplexity,  Action_count ) %>% 
-  tab_cols(total(), Diagnosis_group) %>% 
-  tab_stat_mean_sd_n() %>% 
-  tab_pivot() %>% 
-  tab_transpose()
-
-b %>% 
-  tab_cells( NEvents, VisitDuration, A_NetComplexity,   Action_count  ) %>% 
-  tab_cols(total(), Physician) %>% 
-  tab_stat_mean_sd_n() %>% 
-  tab_pivot() %>% 
-  tab_transpose()
-}
-
-more_plots <- function(){
-  
-# More plots  -- these operate on the merged clinic-day trajetories
-plot(cds$ymd[cds$Clinic.x=='BATAVIA'],cds$cosine_dist_from_first[cds$Clinic.x=='BATAVIA'])
-plot(cds$ymd[cds$Clinic.x=='BATAVIA'],cds$NumVisits[cds$Clinic.x=='BATAVIA'])
-plot(cds$ymd[cds$Clinic.x=='BATAVIA'],cds$NumUniqueProcedures[cds$Clinic.x=='BATAVIA'])
-plot(cds$ymd[cds$Clinic.x=='BATAVIA'],cds$NumUniqueDiagnosisGroups[cds$Clinic.x=='BATAVIA'])
-plot(cds$ymd[cds$Clinic.x=='BATAVIA'],cds$cosine_dist_from_first[cds$Clinic.x=='BATAVIA'])
-
-}
-
+# this function reads the raw data from URMC and creates files for clinic_day and visits
 
 read_ACHR_data <- function(){
 
@@ -487,15 +448,6 @@ make_buckets_1 <- function(o, criteria){
 
 
 
-
-
-# 
-# make_box_plots <- function(){
-# ggboxplot(ACHR_test[NEvents>100 & Clinic=='DRH'], x = "VisitMonth", y = "NetComplexity",
-#           color = "VisitDay",
-#           ylab = "Complexity", xlab = "Month (DRH)")
-# }
-# 
 
 
 

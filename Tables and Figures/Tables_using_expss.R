@@ -6,6 +6,8 @@
 # Absolutely no warranty!
 ##########################################################################################################
 
+# These are just examples -- need to  work out tables for particular purposes.
+
 # These tables are based on cd=clinic_days and  v=visits or other tables with a similar structure
 # The names of specific columns probably need to be adjusted
 
@@ -30,9 +32,8 @@ make_ACHR_tables <- function(cd,v) {
   # 
   expss_output_viewer()
   
-  
   cd %>% 
-    tab_cells(NetComplexity,NumVisits,NEvents/NumVisits,NumUniqueProcedures,NumUniqueDiagnosisGroups,
+    tab_cells(A_NetComplexity,NumVisits,NEvents/NumVisits,NumUniqueProcedures,NumUniqueDiagnosisGroups,
               NumUniqueProcedures/NumVisits,NumUniqueDiagnosisGroups/NumVisits) %>% 
     tab_cols(total(), Clinic) %>% 
     tab_stat_mean() %>% 
@@ -46,20 +47,20 @@ make_ACHR_tables <- function(cd,v) {
   
   
   v %>% 
-    tab_cells( NEvents, VisitDuration, NetComplexity, CompressRatio, Action_count, Workstation_count, Role_count ) %>% 
+    tab_cells( NEvents, VisitDuration, A_NetComplexity, CompressRatio, Action_count, Workstation_count, Role_count ) %>% 
     tab_cols(total(), Clinic) %>% 
     tab_stat_mean() %>% 
     tab_pivot()
   
   v %>% 
-    tab_cells( NEvents, VisitDuration, NetComplexity,  Action_count, Workstation_count, Role_count ) %>% 
+    tab_cells( NEvents, VisitDuration, A_NetComplexity,  Action_count, Workstation_count, Role_count ) %>% 
     tab_cols(total(), Diagnosis_group) %>% 
     tab_stat_mean() %>% 
     tab_pivot() %>% 
     tab_transpose()
   
   v %>% 
-    tab_cells(  NEvents, VisitDuration, NetComplexity,  Action_count ) %>% 
+    tab_cells(  NEvents, VisitDuration, A_NetComplexity,  Action_count ) %>% 
     tab_cols(total(), Diagnosis_group) %>% 
     tab_stat_mean_sd_n() %>% 
     tab_pivot() %>% 
@@ -72,4 +73,8 @@ make_ACHR_tables <- function(cd,v) {
     tab_pivot() %>% 
     tab_transpose()
   
+   
+  
 }
+
+
