@@ -14,7 +14,25 @@
 # 1) reading/cleaning the occurrences
 # 2) Threading the data by  adding ThreadNum and  SeqNum to  the  threads
 
+redo_ACHR_data_from_scratch  <- function(fname){
 
+  # Pick you point of view, or multiple POV...
+  THREAD_CF = c('VISIT_ID')
+  EVENT_CF = c('Action','Role','Workstation')
+  
+  #  first read the data
+  o = read_ACHR_data( fname )
+  
+  # Thread occurrences for each POV  
+  occ = thread_occurrences( o,  THREAD_CF, EVENT_CF ,fname )
+  
+  #  Now aggregate by clinic-day for  each POV
+  clinic_days = ACHR_batch_clinic_days(occ, THREAD_CF, EVENT_CF, fname)
+  
+  # Aggregate by visit for each POV
+  visits = ACHR_batch_visits(occ, THREAD_CF, EVENT_CF, fname)
+  
+}
 
 # this function reads the raw data from URMC
 # It returns the  data  frame  and  also saves it as an Rdata file with the  same name as the csv
@@ -93,14 +111,18 @@ cleanOccBatch <- function(fileRows){
 # It returns  the threaded set of occurrences  and also saves it as  Rdata. 
 thread_occurrences <- function(occ,THREAD_CF,EVENT_CF, fname='emr'){
   
+  print(paste('Number of occurrences: ', nrow(occ)))
+  
   # these will be  new column names
-  new_thread_name = newColName(THREAD_CF)
-  new_event_name = newColName(EVENT_CF)
+  new_thread_col = newColName(THREAD_CF)
+  new_event_col = newColName(EVENT_CF)
+  
+  print(paste('new_thread_col: ',new_thread_col))
+  print(paste('new_event_col: ', new_event_col))
   
   # Add names for the new columns, if necessary
-  if  (!(new_thread_name  %in% colnames(occ))) {  occ = combineContextFactors(occ,THREAD_CF,new_thread_name) }
-  if  (!(new_event_name  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CF,new_event_name) }
-  
+  if  (!(new_thread_col  %in% colnames(occ))) {  occ = combineContextFactors(occ,THREAD_CF,new_thread_col) }
+  if  (!(new_event_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CF,new_event_col) }
   
   # ThreadNet code assumes these columns will be there, so we need to add them
   new_occ_VR$threadNum = integer(nrow(new_occ_VR))
@@ -110,15 +132,21 @@ thread_occurrences <- function(occ,THREAD_CF,EVENT_CF, fname='emr'){
   if  (THREAD_CF == 'VISIT_ID') {
     occ$threadNum = occ$Visit_ID
     occ$seqNum = occ$seqn
-  }
+    
+    #  say how many there  are... 
+    print(paste('Number of threads (visits) in this POV: ', length(unique( occ$Visit_ID ))))
+    
+    #  Now  sort the  data  set by the new  threadNum and tStamp
+    occ = occ[order(occ[[new_thread_col]],occ$tStamp),]
+    
+  } 
+  else {
   
   #  Now  sort the  data  set by the new  threadNum and tStamp
-  occ = occ[order(occ[[new_thread_name]],occ$tStamp),]
-  
-  tn<<-0
+  occ = occ[order(occ[[new_thread_col]],occ$tStamp),]
   
   # get the list of unique identifies for the threads. The length of this list is the number of threads
-  pov_list = unique(occ[[new_thread_name]])
+  pov_list = unique(occ[[new_thread_col]])
   print(paste('Number of threads in this POV: ', length(pov_list)))
   
   start_row=1
@@ -126,7 +154,7 @@ thread_occurrences <- function(occ,THREAD_CF,EVENT_CF, fname='emr'){
   for (p in pov_list){
     
     # get the length of the thread
-    tlen = sum(new_occ_VR$Visit_Role==p)
+    tlen = sum(occ[[new_thread_col]]==p)
     
     # guard against error
     if (length(tlen)==0) tlen=0
@@ -136,16 +164,36 @@ thread_occurrences <- function(occ,THREAD_CF,EVENT_CF, fname='emr'){
       end_row = start_row+tlen-1
       
       # they all get the same thread number and incrementing seqNum
-      new_occ_VR[start_row:end_row, "threadNum"] <- as.matrix(rep(as.integer(thrd),tlen))
-      new_occ_VR[start_row:end_row, "seqNum"] <- seq(tlen)
+      occ[start_row:end_row, "threadNum"] <- as.matrix(rep(as.integer(thrd),tlen))
+      occ[start_row:end_row, "seqNum"] <- seq(tlen)
       
       # increment the counters for the next thread
       start_row = end_row + 1
       thrd=thrd+1
+      
+      if (thrd %% 1000 ==0) print(paste0('Thread count =  ',thrd))
+      
     }
-    
   }
+ }
+  
+  ### This is URMC specific:   For all POV combinations, add the clinic and clinic_day
+  
+  #  get the date only from the timestamp
+  occ$ymd <- format(as.POSIXct(new_occ$tStamp),"%Y-%m-%d")
+  
+  # make new columns for clinic + day and events
+   occ = unite(occ, 'Clinic_ymd', c('Clinic','ymd'),sep='_',remove = 'false')
+  
+    
+   # Now save the result for  later and return it, as well. 
+  save(occ, file=paste0(paste(fname,new_thread_col,new_event_col,sep='+'), '.Rdata'))
+  print(paste('Saved threaded  occurrences: ', nrow(occ)))
+  
+  return(occ)
+  
 
+  ############   extra  stuff not used  #############
   # # split occ data frame by threadNum to find earliest time value for that thread
   # # then substract that from initiated relativeTime from above
   # occ_split = lapply(split(occ, occ$threadNum),
@@ -153,36 +201,8 @@ thread_occurrences <- function(occ,THREAD_CF,EVENT_CF, fname='emr'){
   # 
   # # # row bind data frame back together
   # occ= data.frame(do.call(rbind, occ_split))
-    
-  save(new_occ_VR, file='auditfinal_VR_10292018.rData')
-  
-  
 
-  
- 
-  
-  #  get the date only from the timestamp
-  new_occ$ymd <- format(as.POSIXct(new_occ$tStamp),"%Y-%m-%d")
-  
-  # Rename one of  the clinics so it doesn't have an underscore.  
-  new_occ$Clinic = gsub('HH_POB','HHPOB',new_occ$Clinic)
-  
-  # make new columns for clinic + day and events
-  new_occ = unite(new_occ, 'Clinic_ymd', c('Clinic','ymd'),sep='_',remove = 'false')
-  
-  
 
-  # save this intermediate result for later use
-  save(new_occ, file='auditfinal_10022018.rData')
-  
-
-  #  RUN THESE TO BOIL/SAVE THE COMPLEXITY DATA
-  clinic_days = ACHR_batch_clinic_days(new_occ, TN, EVENT_CF)
-  save(clinic_days, file='ACHRV3_clinic_days.rData')
-  
-  visits = ACHR_batch_visits(new_occ, TN, EVENT_CF)
-  save(visits, file='ACHRV3_visits_with_timestamps.rData')
-  
 }
   
 
