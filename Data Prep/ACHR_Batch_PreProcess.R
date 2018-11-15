@@ -81,36 +81,45 @@ cleanOccBatch <- function(fileRows){
   return(complete)
 }
   
-
-# This function adds columns  for  the the thread, if necessary
+#########################################################################################
+# This function adds columns  for  the the thread, as requested
 # Then it sorts by thread and tStamp and  adds thread/sequence numbers to  each thread.
+# 
+# Typical column names from the UMRC file
+# ALL_CF = c('Action','Workstation','Role','Clinic','Diagnosis_Group')
+# thread_CF = c('Visit_ID', 'Role', 'Workstation')
+# event_CF = c('Action','Role','Workstation')
+# TN = 'Visit_ID'
 # It returns  the threaded set of occurrences  and also saves it as  Rdata. 
-thread_occurrences <- function(o,thread_CF,fname='emr'){
+thread_occurrences <- function(occ,THREAD_CF,EVENT_CF, fname='emr'){
   
-  # call the functions that clean up the occurrences
-  # Column names are hard coded from the UMRC file
-  # EVENT_CF = c('Action','Workstation','Role','Clinic','Diagnosis_Group')
-  EVENT_CF = c('Action','Role','Workstation')
-  TN = 'Visit_ID'
+  # these will be  new column names
+  new_thread_name = newColName(THREAD_CF)
+  new_event_name = newColName(EVENT_CF)
   
-
+  # Add names for the new columns, if necessary
+  if  (!(new_thread_name  %in% colnames(occ))) {  occ = combineContextFactors(occ,THREAD_CF,new_thread_name) }
+  if  (!(new_event_name  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CF,new_event_name) }
   
-  ###  Code for Visit_Role ###
   
-  # need to add Visit_Role column and use it to create threads.  Each Visit_Role needs a unique threadNum and seqNum
-  # This is likely to be tricky
-  new_occ_VR = unite(new_occ, 'Visit_Role', c('Visit_ID','Role'),sep='_',remove = 'false')
-  
-  # add two columns to the data frame
+  # ThreadNet code assumes these columns will be there, so we need to add them
   new_occ_VR$threadNum = integer(nrow(new_occ_VR))
   new_occ_VR$seqNum =   integer(nrow(new_occ_VR))
-  new_occ_VR = new_occ_VR[order(new_occ_VR$Visit_Role,new_occ_VR$tStamp),]
+  
+  # Special case for  Visit_ID, which is already filled in URMC  EMR data
+  if  (THREAD_CF == 'VISIT_ID') {
+    occ$threadNum = occ$Visit_ID
+    occ$seqNum = occ$seqn
+  }
+  
+  #  Now  sort the  data  set by the new  threadNum and tStamp
+  occ = occ[order(occ[[new_thread_name]],occ$tStamp),]
+  
   tn<<-0
   
-  # new_occ_VR = new_occ_VR[1:1000,]
-  
-  pov_list = unique(new_occ_VR$Visit_Role)
-
+  # get the list of unique identifies for the threads. The length of this list is the number of threads
+  pov_list = unique(occ[[new_thread_name]])
+  print(paste('Number of threads in this POV: ', length(pov_list)))
   
   start_row=1
   thrd=1
@@ -148,17 +157,9 @@ thread_occurrences <- function(o,thread_CF,fname='emr'){
   save(new_occ_VR, file='auditfinal_VR_10292018.rData')
   
   
-  
-  # ThreadNet code assumes these columns will be there, so we need to add them
-  # do not use these for visit_role
-  # occ$threadNum = occ$Visit_ID
-  # occ$seqNum = occ$seqn
+
   
  
-  # because the occurrences are already sorted, and they have sequence numbers, we should be good to go. 
-  # new_occ = combineContextFactors(occ,EVENT_CF,newColName(EVENT_CF))[1:100000,]
-  new_occ = combineContextFactors(occ,EVENT_CF,newColName(EVENT_CF)) 
-  new_occ = combineContextFactors(new_occ,EVENT_CF[1:2],newColName(EVENT_CF[1:2])) 
   
   #  get the date only from the timestamp
   new_occ$ymd <- format(as.POSIXct(new_occ$tStamp),"%Y-%m-%d")
