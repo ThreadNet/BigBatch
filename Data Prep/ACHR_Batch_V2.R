@@ -35,7 +35,7 @@
 
 # this function reads the raw data from URMC and creates files for clinic_day and visits
 
-read_ACHR_data <- function(){
+read_ACHR_data_old <- function(){
 
   library(tidyr)
   library(data.table)
@@ -48,7 +48,9 @@ read_ACHR_data <- function(){
   
   # This code is tailored for reading in new data from URMC, October 2018
   # read the file into data frame
-  d <<- fread('auditfinal_10022018.csv')
+   d <<- fread('auditfinal_10022018.csv')
+  
+ # d <<- fread('10test.csv')
   
   # Sort and convert to data.table
   vt <<-data.table(arrange(d,desc(Visit_ID,asc(Timestamps))))
@@ -58,7 +60,7 @@ read_ACHR_data <- function(){
   cnx = cn[c(13,1:12,14:15)]
   vt=setcolorder(vt,cnx)
   setnames(vt,'Timestamps','tStamp')
-  setnames(vt,'X','seqn')
+ # setnames(vt,'X','seqn')
   
   # make a dataframe copy just for fun
   vdf <<- as.data.frame(vt)

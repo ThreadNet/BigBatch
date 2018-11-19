@@ -26,3 +26,4 @@ vignettes/*.pdf
 rsconnect/
 >>>>>>> be0331537859f5addf650269855aa0a9d49ca5d5
 .Rproj.user
+emrt+Visit_ID+Role_Action.Rdata
