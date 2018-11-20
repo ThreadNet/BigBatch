@@ -189,13 +189,13 @@ thread_occurrences <- function(occ, THREAD_CF, fname='emr'){
 
 
   ############   extra  stuff not used  #############
-  # # split occ data frame by threadNum to find earliest time value for that thread
-  # # then substract that from initiated relativeTime from above
-  # occ_split = lapply(split(occ, occ$threadNum),
-  #                    function(x) {x$relativeTime = difftime(x$relativeTime,  min(lubridate::ymd_hms(x$tStamp)), units=timescale ); x})
-  # 
-  # # # row bind data frame back together
-  # occ= data.frame(do.call(rbind, occ_split))
+  # split occ data frame by threadNum to find earliest time value for that thread
+  # then substract that from initiated relativeTime from above
+  occ_split = lapply(split(occ, occ$threadNum),
+                     function(x) {x$relativeTime = difftime(x$relativeTime,  min(lubridate::ymd_hms(x$tStamp)), units=timescale ); x})
+
+  # # row bind data frame back together
+  occ= data.frame(do.call(rbind, occ_split))
 
 
 
