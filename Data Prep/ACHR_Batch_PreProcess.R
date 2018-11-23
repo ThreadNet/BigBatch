@@ -143,10 +143,14 @@ thread_occurrences <- function(occ, THREAD_CF, fname='emr'){
   occ$threadNum = integer(nrow(occ))
   occ$seqNum =   integer(nrow(occ))
   
-  
+  #_#_#_#_#_#_ I think what we need to do to get the correct visit_role is sort by  visit and time stamp
+  #_#_#_#_#_#_ But then SPLIT the visit according to visit_role or visit_workstation or whatever
   #  Now  sort the  data  set by the new  threadNum and tStamp
   occ = occ[order(occ[[new_thread_col]],occ$tStamp),]
   
+  
+  #_#_#_#_#_#_ This will be incorrect if  the same role is occurs more than once in a single visit. 
+  #_#_#_#_#_#_ Need to break  it out according to the changes in role within a visit...  
   # get the list of unique identifies for the threads. The length of this list is the number of threads
   pov_list = unique(occ[[new_thread_col]])
   print(paste('Number of threads in this POV: ', length(pov_list)))
@@ -190,12 +194,12 @@ thread_occurrences <- function(occ, THREAD_CF, fname='emr'){
 
   ############   extra  stuff not used  #############
   # split occ data frame by threadNum to find earliest time value for that thread
-  # then substract that from initiated relativeTime from above
-  occ_split = lapply(split(occ, occ$threadNum),
-                     function(x) {x$relativeTime = difftime(x$relativeTime,  min(lubridate::ymd_hms(x$tStamp)), units=timescale ); x})
-
-  # # row bind data frame back together
-  occ= data.frame(do.call(rbind, occ_split))
+  # # then substract that from initiated relativeTime from above
+  # occ_split = lapply(split(occ, occ$threadNum),
+  #                    function(x) {x$relativeTime = difftime(x$relativeTime,  min(lubridate::ymd_hms(x$tStamp)), units=timescale ); x})
+  # 
+  # # # row bind data frame back together
+  # occ= data.frame(do.call(rbind, occ_split))
 
 
 
