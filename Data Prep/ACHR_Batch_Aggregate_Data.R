@@ -24,6 +24,8 @@
 # TN = threadNum in most cases
 # CFs can be chosen -- they don't have to match the POV
 
+#  need to bring Role_ID forward when looking at Visit_Role, so we can track residents over time.
+
 ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
   
   library(tidyr)
@@ -33,9 +35,12 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
   library(lubridate)
   library(stringr)
   
-  # don't remember why  this is here...
+  # Add  columns for combinations of CFs if needed
   new_event_col = newColName(EVENT_CFs)
   if  (!(new_event_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CFs,new_event_col) }
+ 
+  all_cf_col = newColName(ALL_CFs)
+  if  (!(all_cf_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,ALL_CFs,all_cf_col) } 
   
   # get the list of buckets
   bucket_list <- make_buckets_1(occ, TN)
@@ -49,16 +54,31 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
                              
                             # Only run for visits with more than two occurrences
                         
-                             # get the network
-                             n = threads_to_network_original(df,TN, new_event_col)
+                             # get the network -- only if there are enough rows...
+                             
+                              if (nrow(df)>2)   n = threads_to_network_original(df,TN, new_event_col) 
+                              else  n = list(edgeDF=t(c(0)),nodeDF=t(c(0)))
                              
                              # compute each parameter and put them in a vector
                              c(
                                bucket=b,
+                               Clinic = df[1,'Clinic'],
+                               Physician  = as.character(df[1,'Physician']),
+                               ymd = df[1,'ymd'],
+                               Clinic_ymd = df[1,'Clinic_ymd'],
+                               Weekday  = df[1,'Weekday'],
+                               Month  = df[1,'Month'],
+                               Phase =  compute_phase(df$tStamp[1]),
+                               threadNum = df[1,'threadNum'],
+                               Visit_ID  = df[1,'Visit_ID'],
+                               Subject_ID  = df[1,'Subject_ID'],
                                NEvents = nrow(df),
                                ThreadStart= as.character( df[1,'tStamp'] ),
                                ThreadStartInt = df[1,'tStamp'],
                                ThreadDuration= difftime(max(lubridate::ymd_hms(df$tStamp)),  min(lubridate::ymd_hms(df$tStamp)), units='hours' ),
+                               wait_time = compute_wait_time(df),
+                               #   Visit_number = integer(N),
+                               #   LOC_CPT =  character(N),
                                NetComplexity=estimate_network_complexity( n ),
                                Nodes=nrow(n$nodeDF),
                                Edges=nrow(n$edgeDF),
@@ -66,33 +86,42 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
                                Entropy = compute_entropy(table(df[[new_event_col]])[table(df[[new_event_col]])>0]),
                                NumProcedures = count_procedures(df$Proc[1]),
                                NumDiagnoses = count_diagnoses(df$Diag[1]),
-                               wait_time = compute_wait_time(df),
-                             #   Visit_number = integer(N),
-                             #   LOC_CPT =  character(N),
-                                Visit_ID  = df[1,'Visit_ID'],
-                                Subject_ID  = df[1,'Subject_ID'],
-                                Clinic = df[1,'Clinic'],
-                                ymd = df[1,'ymd'],
-                                Clinic_ymd = df[1,'Clinic_ymd'],
-                                Proc = df[1,'Proc'],
-                                Diagnosis = df[1,'Diag'],   # diag in the raw data
-                                Diagnosis_group  = df[1,'Diagnosis_Group'],
-                                Physician  = df[1,'Physician'],
-                                Weekday  = df[1,'Weekday'],
-                                Month  = df[1,'Month'],
-                                Phase =  compute_phase(df$tStamp[1]),
-                                CF_Alignment = compute_alignment(df,TN, EVENT_CFs, ALL_CFs ),
+                               Proc = as.character(df[1,'Proc']),
+                               Diagnosis = as.character(df[1,'Diag']),    
+                               Diagnosis_group  = df[1,'Diagnosis_Group'],
+                               CF_Alignment = 1,
+                              # CF_Alignment = compute_alignment(df,TN, EVENT_CFs, ALL_CFs ),
+                               ALL_CF_count = length(unique(df[[all_cf_col]])),
+                               ALL_CF_entropy = compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]), 
                              
-                             # need to figure out how to name these
+                             # name these afterwareds
                              sapply(ALL_CFs, function(cf){
                                c(
-                                 assign( paste0(cf,"_count"), length(unique(df[[cf]]))),
-                                 assign( paste0(cf,"_entropy"), compute_entropy(table(df[[cf]])[table(df[[cf]])>0])) 
+                                  length(unique(df[[cf]])),
+                                  compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) 
+                                 
+                                 # assign( paste0(cf,"_count"), length(unique(df[[cf]]))),
+                                 # assign( paste0(cf,"_entropy"), compute_entropy(table(df[[cf]])[table(df[[cf]])>0])) 
                                ) })
                              
                              )
                              
   } )))
+ 
+ 
+ # name the last columns -- code has to match  above
+ cn =  as.vector(sapply(ALL_CFs, function(cf){
+   c( paste0(cf,"_count"),  
+    paste0(cf,"_entropy") ) }))
+ 
+ # now assign them to the last columns
+ last_col = ncol(Thrds)
+ first_col= last_col-length(cn)+1
+ setnames(Thrds, c(first_col:last_col), cn)
+ 
+ # Computer the alignment of the context factors
+ Thrds$CF_Alignment =  as.numeric( Thrds$Action_count) / as.numeric( Thrds$ALL_CF_count )
+  
  
  save(Thrds, file=paste0(paste('Thrds',TN,new_event_col,sep='+'), '.Rdata'))
  
@@ -131,7 +160,7 @@ compute_alignment <- function(df,TN, EVENT_CFs, ALL_CFs ){
   # first get numerator
   n= length(unique(df$Action))
   
-  # Now get the total number with all  of the CFs used to define the events
+  # Now get the total number with all  of the CFs  
   m= length(unique( df[[newColName(EVENT_CFs)]]))
 
   return(n/m)
@@ -150,14 +179,17 @@ compute_wait_time <- function(df){
 
 count_procedures <- function( p ){
   
+  # if no procedures, return zero
+  if (is.na( p )) return( 0 )
+  
   # get the overall number of items
-  total_num=length(grep('#@#', p ))
+  total_num = str_count( p, '#@#')
   
   # adjust for the visit codes that are not actual procedures
   v=c('99211','99212','99213','99214','99215','99201','99202','99203','99204','99205')
   
   # just look at the first occurrence in the df
-  num_visit_codes  = sum(sapply(v,function(x){length(grep( x, p ))}))
+  num_visit_codes  = sum(str_count( p,  v ))
   
   # limit  to non-negative 
   total_num = max(0, total_num - num_visit_codes) 
@@ -167,7 +199,9 @@ count_procedures <- function( p ){
 
 # This one  is easy
 count_diagnoses <- function(d){
-  return(length(grep('#@#', d )))
+  
+  # Sometimes the marker is missing, so set the floor to one.  There is always at least one. 
+  return( max(1, str_count( d, '#@#' )))
 }
 
 
