@@ -34,6 +34,7 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
   library(ngram)
   library(lubridate)
   library(stringr)
+  library(data.table)
   
   # Add  columns for combinations of CFs if needed
   new_event_col = newColName(EVENT_CFs)
@@ -119,8 +120,8 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
  first_col= last_col-length(cn)+1
  setnames(Thrds, c(first_col:last_col), cn)
  
- # Computer the alignment of the context factors
- Thrds$CF_Alignment =  as.numeric( Thrds$Action_count) / as.numeric( Thrds$ALL_CF_count )
+ # Compute the alignment of the context factors
+ Thrds$CF_Alignment =  as.numeric( as.character(Thrds$Action_count)) / as.numeric( as.character(Thrds$ALL_CF_count ))
   
  
  save(Thrds, file=paste0(paste('Thrds',TN,new_event_col,sep='+'), '.Rdata'))
