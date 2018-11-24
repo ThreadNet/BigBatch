@@ -54,7 +54,7 @@ read_ACHR_data <- function(fname){
   # read the file into data frame
    d <-   fread( paste0(fname, '.csv') )
   
-  # Sort by visit and timestamp
+  # Sort by visit and timestamps
    d  <- arrange(d,desc(Visit_ID,asc(Timestamps)))
   
   ##################################################################################
@@ -122,7 +122,6 @@ cleanOccBatch <- function(fileRows){
 # ALL_CF = c('Action','Workstation','Role','Clinic','Diagnosis_Group')
 # thread_CF = c('Visit_ID', 'Role', 'Workstation')
 # event_CF = c('Action','Role','Workstation')
-
 # It returns  the threaded set of occurrences  and also saves it as  Rdata. 
 thread_occurrences <- function(occ, THREAD_CF, fname='emr'){
   
@@ -130,66 +129,43 @@ thread_occurrences <- function(occ, THREAD_CF, fname='emr'){
   
   # these will be  new column names
   new_thread_col = newColName(THREAD_CF)
- # new_event_col = newColName(EVENT_CF)
+  # new_event_col = newColName(EVENT_CF)
   
   print(paste('new_thread_col: ',new_thread_col))
- # print(paste('new_event_col: ', new_event_col))
+  # print(paste('new_event_col: ', new_event_col))
   
   # Add names for the new columns, if necessary
   if  (!(new_thread_col  %in% colnames(occ))) {  occ = combineContextFactors(occ,THREAD_CF,new_thread_col) }
-# if  (!(new_event_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CF,new_event_col) }
+  # if  (!(new_event_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CF,new_event_col) }
   
   # ThreadNet code assumes these columns will be there, so we need to add them
   occ$threadNum = integer(nrow(occ))
   occ$seqNum =   integer(nrow(occ))
   
-  #_#_#_#_#_#_ I think what we need to do to get the correct visit_role is sort by  visit and time stamp
-  #_#_#_#_#_#_ But then SPLIT the visit according to visit_role or visit_workstation or whatever
-  #  Now  sort the  data  set by the new  threadNum and tStamp
-  occ = occ[order(occ[[new_thread_col]],occ$tStamp),]
+  # Assume the data are sorted by visit_ID and tStamp -- the natural flow of the visit.
+  idx_list = which(occ[[new_thread_col]] !=dplyr::lag(occ[[new_thread_col]]))
+  idx_list = c(idx_list, nrow(occ))
+  start_idx = c(1, head(idx_list,-1))  # add 1 to the front and drop the last
+  end_idx =   idx_list - 1    # shift back by one
   
+  print(paste('Number of threads in this POV: ', length(idx_list)))
   
-  #_#_#_#_#_#_ This will be incorrect if  the same role is occurs more than once in a single visit. 
-  #_#_#_#_#_#_ Need to break  it out according to the changes in role within a visit...  
-  # get the list of unique identifies for the threads. The length of this list is the number of threads
-  pov_list = unique(occ[[new_thread_col]])
-  print(paste('Number of threads in this POV: ', length(pov_list)))
-  
-  start_row=1
-  thrd=1
-  for (p in pov_list){
-    
-    # get the length of the thread
-    tlen = sum(occ[[new_thread_col]]==p)
-    
-    # guard against error
-    if (length(tlen)==0) tlen=0
-    if (tlen>0){
-     
-      #compute the index of the end row
-      end_row = start_row+tlen-1
-      
-      # they all get the same thread number and incrementing seqNum
-      occ[start_row:end_row, "threadNum"] <- as.matrix(rep(as.integer(thrd),tlen))
-      occ[start_row:end_row, "seqNum"] <- seq(tlen)
-      
-      # increment the counters for the next thread
-      start_row = end_row + 1
-      thrd=thrd+1
-      
-      if (thrd %% 1000 ==0) print(paste0('Thread count =  ',thrd))
-      
+  # sapply(seq(length(idx_list)), function(x)
+    for (x in seq(length(idx_list)))
+    {   if (x %% 1000 ==0) print(paste0('Thread count =  ',x))
+     occ[start_idx[x]:end_idx[x],'threadNum'] = x
+     occ[start_idx[x]:end_idx[x],'seqNum'] = c(1:(end_idx[x]-start_idx[x]+1))
     }
-  }
   
-   # Now save the result for  later and return it, as well. 
-#  save(occ, file=paste0(paste(fname,new_thread_col,new_event_col,sep='+'), '.Rdata'))
+  # Now save the result for  later and return it, as well. 
+  #  save(occ, file=paste0(paste(fname,new_thread_col,new_event_col,sep='+'), '.Rdata'))
   save(occ, file=paste0(paste(fname,new_thread_col,sep='+'), '.Rdata'))
   
   print(paste('Saved threaded  occurrences: ', nrow(occ)))
   
   return(occ)
 }
+
 
 
   ############   extra  stuff not used  #############

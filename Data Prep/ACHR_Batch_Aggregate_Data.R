@@ -90,27 +90,20 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
                                Proc = as.character(df[1,'Proc']),
                                Diagnosis = as.character(df[1,'Diag']),    
                                Diagnosis_group  = df[1,'Diagnosis_Group'],
-                               CF_Alignment = 1,
-                              # CF_Alignment = compute_alignment(df,TN, EVENT_CFs, ALL_CFs ),
+                               CF_Alignment = 1,    # make placeholder, but compute below
                                ALL_CF_count = length(unique(df[[all_cf_col]])),
                                ALL_CF_entropy = compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]), 
                              
-                             # name these afterwareds
+                             # name these columns afterwards
                              sapply(ALL_CFs, function(cf){
-                               c(
-                                  length(unique(df[[cf]])),
-                                  compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) 
-                                 
-                                 # assign( paste0(cf,"_count"), length(unique(df[[cf]]))),
-                                 # assign( paste0(cf,"_entropy"), compute_entropy(table(df[[cf]])[table(df[[cf]])>0])) 
-                               ) })
+                               c( length(unique(df[[cf]])),
+                                  compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) ) })
                              
                              )
-                             
-  } )))
+                      } )))
  
  
- # name the last columns -- code has to match  above
+ # name the last columns -- code has to match above
  cn =  as.vector(sapply(ALL_CFs, function(cf){
    c( paste0(cf,"_count"),  
     paste0(cf,"_entropy") ) }))
@@ -122,7 +115,6 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
  
  # Compute the alignment of the context factors
  Thrds$CF_Alignment =  as.numeric( as.character(Thrds$Action_count)) / as.numeric( as.character(Thrds$ALL_CF_count ))
-  
  
  save(Thrds, file=paste0(paste('Thrds',TN,new_event_col,sep='+'), '.Rdata'))
  
