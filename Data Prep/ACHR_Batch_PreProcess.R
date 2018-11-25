@@ -145,6 +145,8 @@ thread_occurrences <- function(occ, THREAD_CF, fname='emr'){
   # Assume the data are sorted by visit_ID and tStamp -- the natural flow of the visit.
   idx_list = which(occ[[new_thread_col]] !=dplyr::lag(occ[[new_thread_col]]))
   idx_list = c(idx_list, nrow(occ))
+  
+  # creates two lists of indices so they match up correctly. 
   start_idx = c(1, head(idx_list,-1))  # add 1 to the front and drop the last
   end_idx =   idx_list - 1    # shift back by one
   

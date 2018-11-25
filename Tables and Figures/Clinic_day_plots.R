@@ -34,8 +34,11 @@ plots_for_papers <- function(){
   plot(cds$Clinic.x,cds$A_NetComplexity)
   
   # Clinic change over time, with and without smoothing
-  ggplot(data = cds, aes(x = ymd, y = corr_with_first, group=Clinic)) + geom_line(aes(color=Clinic))
-  ggplot(data = cds, aes(x = ymd, y = rollmean(corr_with_first,5,na.pad=TRUE), group=Clinic)) + geom_line(aes(color=Clinic))
+  ggplot(data = cds, aes(x = ymd, y = Dist_from_reference, group=Clinic)) + geom_line(aes(color=Clinic))
+  ggplot(data = cds, aes(x = ymd, y = rollmean(Dist_from_reference,5,na.pad=TRUE), group=Clinic)) + geom_line(aes(color=Clinic))
+  
+  # ROle change over time
+  ggplot(data = cds, aes(x = ymd, y = Dist_from_reference, group=Role)) + geom_line(aes(color=Role))
   
 }
 
