@@ -8,6 +8,11 @@
 
 # these functions will take clinic data and produce trajectories (distance of the graph from a reference graph)
 
+# need to rethink how this selects occurrences in buckets.  
+#  Should buckets always be by clinic_day??  This allows us to track what happens in each clinic over time.  
+
+#  We want to track roles over time in each clinic.  So it's Clinic_day and also visit_role.  We have threads by visit_role
+
 # start with auditfinal_10022018.csv --> use ACHR_Batch_v2 to make new_occ.  
 # The code here starts with new_occ (~ 7.72m occurrences that we break down into 1857 clinic_days and 57835 visits)
 
@@ -84,7 +89,8 @@ graph_trajectory_filtered  <- function(e, bucketCF, cf, n_gram_size=2, reference
     bcount= bcount +1
    # print(paste('b =',b))
     
-    # get text vector for the whole data set.  Bucket needs at least 2 threads
+     # THIS CHECK NEEDS TO COVER WHOLE CHUNK OF CODE...
+     # get text vector for the whole data set.  Bucket needs at least 2 threads
     # n_gram_size = 1 for 1-grams, n_gram_size = 2 for pairs.
       th = get_bucket(e, b)
       if (nrow(th)>2) { ngdf = count_ngrams(th, 'threadNum', cf, n_gram_size)[1:2]  }  
@@ -155,32 +161,9 @@ graph_trajectory_filtered  <- function(e, bucketCF, cf, n_gram_size=2, reference
                                     )
                                   })))
   
-  #  correlate each row with the first one stick it in a dataframe
-  # df =data.frame(window=1:(nWindows-1),
-  #                Clinic_ymd = blist[1:(nWindows-1)],
-  #                Clinic= unlist(lapply(1:(nWindows-1),
-  #                                      function(i){ unlist(strsplit(blist[i],'_'))[1] })),
-  #                ymd=unlist(lapply(1:(nWindows-1),
-  #                                  function(i){ unlist(strsplit(blist[i],'_'))[2] })),
-  #                pct_retained = unlist(lapply(1:(nWindows-1),
-  #                                             function(i){sum((windowFreqMatrix[i,]>0)+(windowFreqMatrix[i+1,]>0)==2)/
-  #                                                 sum(windowFreqMatrix[i,]>0)
-  #                                                 })) ,
-  #                pct_possible = unlist(lapply(1:(nWindows-1),
-  #                                             function(i){sum(windowFreqMatrix[i,] > 0)/Max_Order })) ,
-  #                complexity = unlist(lapply(1:(nWindows-1),
-  #                                           function(i){ estimate_task_complexity_index( nodes ,sum(windowFreqMatrix[i,] > 0) ) })) ,
-  #                Dist_from_reference= unlist(lapply(1:(nWindows-1),
-  #                                               function(i){distance(rbind(windowFreqMatrix[i,],windowFreqMatrix[reference_day,]),
-  #                                                                    method='cosine' ) })),
-  #                 Dist_from_next= unlist(lapply(1:(nWindows-1),
-  #                                                function(i){distance(rbind(windowFreqMatrix[i,],windowFreqMatrix[i+1,]),
-  #                                                                     method='cosine' ) }))
-  #                )
+    ##### maybe use merge to get other variables included?  Or do that outside the function...
   
   save(df, file=paste0(save_file_name,'.rData') )
-  
-
   
  return(df)
   
