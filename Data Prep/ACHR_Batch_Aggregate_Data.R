@@ -14,6 +14,11 @@
 # 1) By thread (usually visit, but could be visit_role)
 # 2) By Clinic_day
   
+# Rewrite for speed: 
+# a) go back to for loop, but just for the stuff that is computed based on the df
+# b) grab first row of each thread seqNum ==1 from the table
+# c) merge them back  together
+# d) Probably need to do different versions for visit vs. visit_role because a lot of the parameters make no sense...
 
 ###################################################################
 ###################################################################
