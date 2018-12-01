@@ -13,19 +13,28 @@
 # 2) Threading the data by  adding ThreadNum and  SeqNum to  the  threads
 #
 ##########################################################################################################
-
+library(tidyr)
+library(data.table)
+library(dplyr)
+library(ThreadNet)
+library(ngram)
+library(lubridate)
 
 redo_ACHR_data_from_scratch  <- function(fname){
 
+  fname = 'audit_111818'
+  
   # Pick you point of view, or multiple POV...
-  THREAD_CF = c('VISIT_ID')
+  THREAD_CF = c('Visit_ID')
   EVENT_CF = c('Action','Role','Workstation')
+  ALL_CF = c('Action','Role','Workstation')
   
   #  first read the data
   o = read_ACHR_data( fname )
   
-  # Thread occurrences for each POV  
-  occ = thread_occurrences( o,  THREAD_CF, EVENT_CF ,fname )
+  # Thread occurrences  adds threadNum and seqNum to each thread, as defined by the the thread_CF.
+  # Threads are always WITHIN VISITS in this code -- so they can be whole visits or chunks of visits (e.g., visit_ID_Role)
+  occ = thread_occurrences( o,  THREAD_CF ,fname )
   
   #  Now aggregate by clinic-day for  each POV
   clinic_days = ACHR_batch_clinic_days(occ, THREAD_CF, EVENT_CF, fname)
@@ -33,6 +42,9 @@ redo_ACHR_data_from_scratch  <- function(fname){
   # Aggregate by visit for each POV
   visits = ACHR_batch_visits(occ, THREAD_CF, EVENT_CF, fname)
     
+  # compute  trajectories to see difference from a reference graph
+  traj = graph_trajectory( occ, 'Clinic_ymd', EVENT_CF, 2, 1, 0, 'Clinic_trajectory')
+  
 }
 
 # this function reads the raw data from URMC
@@ -40,24 +52,17 @@ redo_ACHR_data_from_scratch  <- function(fname){
 # Tested Nov 16.
 read_ACHR_data <- function(fname){
 
-  library(tidyr)
-  library(data.table)
-  library(dplyr)
-  library(ThreadNet)
-  library(ngram)
-  library(lubridate)
-  library(anytime)
+
   
   
   # This code is tailored for reading in new data from URMC, October 2018
   # Assumes there  is a column  called 'Timestamps" in column 13 and  "Visit_ID"
-  # read the file into data frame
+  # read the file into data.table
    d <-   fread( paste0(fname, '.csv') )
   
-  # Sort by visit and timestamps
+  # Sort by visit and timestamps (will do this later with setkey)
    d  <- arrange(d,desc(Visit_ID,asc(Timestamps)))
-  
-  ##################################################################################
+
   # This  stuff  is URMC specific 
   #
   # move and rename the columns, as needed
@@ -68,9 +73,13 @@ read_ACHR_data <- function(fname){
   setnames(d,'Timestamps','tStamp')
   setnames(d,'V1','seqn')
 
-  # This converts numbers to char and replaces spaces with underscore
-   d = cleanOccBatch(d)
+   # Fix the name of the Highland  clinic
+   d$Clinic = gsub('HH POB','HHPOB',d$Clinic)
   
+  
+  # This converts numbers to char and replaces spaces with underscore
+    d = cleanOccBatch(d)
+ 
     ### This is URMC specific: Add the clinic and clinic_day  and fix the code for the highland  clinic
    
    # get the date only from the timestamp
@@ -79,11 +88,11 @@ read_ACHR_data <- function(fname){
    # make new columns for clinic + day and events
    d = unite(d, 'Clinic_ymd', c('Clinic','ymd'),sep='_',remove = 'false')
    
-   # Fix the name of the Highland  clinic
-   d$Clinic = gsub('HH_POB','HHPOB',d$Clinic)
    
   # Save the result   
-  save(d, file=paste0(fname, '.rData')) 
+  save_file_name = paste0(fname, '.rData')
+  save(d, file=save_file_name) 
+  print(paste("Saved ",nrow(d), " occurrences in ",save_file_name))
   
   return(d)
   
@@ -101,7 +110,7 @@ cleanOccBatch <- function(fileRows){
   cleanedCF <- data.frame(lapply(fileRows[2:ncol(fileRows)], function(x){  gsub(" ","_",x)  }) )
   
   # bind tStamp back to cleaned data
-  complete <- cbind(tStamp,cleanedCF)
+  complete <- as.data.table(cbind(tStamp,cleanedCF))
   
   # Old code  for forcing tStamp into a "YMD_HMS" format -- not  needed  for  URMC  EMR  data
    # complete$tStamp <- as.character(complete$tStamp)
@@ -155,16 +164,18 @@ thread_occurrences <- function(occ, THREAD_CF, fname='emr'){
   # sapply(seq(length(idx_list)), function(x)
     for (x in seq(length(idx_list)))
     {   if (x %% 1000 ==0) print(paste0('Thread count =  ',x))
-     occ[start_idx[x]:end_idx[x],'threadNum'] = x
-     occ[start_idx[x]:end_idx[x],'seqNum'] = c(1:(end_idx[x]-start_idx[x]+1))
+     occ[start_idx[x]:end_idx[x],'threadNum' := x ]
+     occ[start_idx[x]:end_idx[x],'seqNum':= c(1:(end_idx[x]-start_idx[x]+1)) ]
     }
   
   # Now save the result for  later and return it, as well. 
   #  save(occ, file=paste0(paste(fname,new_thread_col,new_event_col,sep='+'), '.Rdata'))
-  save(occ, file=paste0(paste(fname,new_thread_col,sep='+'), '.Rdata'))
   
-  print(paste('Saved threaded  occurrences: ', nrow(occ)))
+  save_file_name = paste0(paste0(paste(fname,new_thread_col,sep='+'), '.rData'))
+  save(occ, file=save_file_name)
   
+  print(paste('Saved threaded occurrences: ', nrow(occ), " in ",save_file_name))
+
   return(occ)
 }
 

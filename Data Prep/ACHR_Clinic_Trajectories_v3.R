@@ -31,7 +31,7 @@ library(zoo)
 # Use this to put the trajectory data with the clinic_day data  
 merge_clinic_days_and_trajectories <- function(){
   
-  clinic_days$Clinic_date = gsub('HH_POB','HHPOB',clinic_days$Clinic_date)
+  # clinic_days$Clinic_date = gsub('HH_POB','HHPOB',clinic_days$Clinic_date)
   cds=merge(x=test0,y=clinic_days,by.x='Clinic_ymd',by.y ='Clinic_date' ,all=TRUE) 
   
 }
@@ -54,34 +54,28 @@ get_bucket <- function(o, b ){
 
 
 # @param e data frame for POV
-# @param bucketCF is the column used to define the bucket list.  Each bucket is a "window"
+# @param bucket_CFs is the column used to define the bucket list, or the combination of columns needed to create the bucket.  Each bucket is a "window"
 # @param cf is the column that defines events (e.g. 'Action_Role')
 # @param filter list contains the threshold level  for filtering out edges with low frequency.
 #
-# need to make sure this works with roles over time... 
+# MAKE SURE YOU ARE  READING IN A SET OF OCCURRENCES THAT HAS THE CORRECT THREADS... 
 #
-graph_trajectory_filtered  <- function(e, bucketCF, cf, n_gram_size=2, reference_day=1, filter_list=0,save_file_name) {
+graph_trajectory  <- function(e, bucket_CFs, cf, n_gram_size=2, reference_day=1, filter_threshold=0,keep_ngram_vectors=FALSE, save_file_name='deleteme') {
   
-  # get total size of possible matrix
-  Max_Order = length(unique(e[[cf]]))^2
+  # add column for bucket_CF if needed
+  bucket_col = newColName(bucket_CFs)
+  if  (!(bucket_col  %in% colnames(e)))  {  e = combineContextFactors(occ,bucket_CFs,bucket_col) }
   
-  
-  # make data frame for results - bid is the bucket_ID
-  vt=data.frame( ngrams=character(), freq=integer(), bid=integer() )
-  
-  # here is the list of buckets
-  blist = unique(e[[bucketCF]])
-  
-  # take the underscore  out so we can use it to strsplit below... and sort it
-  blist=gsub('HH_POB','HHPOB',blist)
-  blist = sort(blist)
-  
+  # here is the sorted list of buckets
+  blist = sort(unique(e[[bucket_col]]))
+
   # now many buckets?
   nb = length(blist)
-  print(blist)
-  print(paste('nb =',nb))
+  # print(blist)
+  print(paste('Number of buckets =',nb))
   
-  complexity_idx=list(nb)
+  # make data frame for results
+  vt=data.frame( ngrams=character(), freq=integer(), bid=integer(),bname=character() )
   
   bcount=0
   # scan through the data
@@ -92,8 +86,8 @@ graph_trajectory_filtered  <- function(e, bucketCF, cf, n_gram_size=2, reference
      # THIS CHECK NEEDS TO COVER WHOLE CHUNK OF CODE...
      # get text vector for the whole data set.  Bucket needs at least 2 threads
     # n_gram_size = 1 for 1-grams, n_gram_size = 2 for pairs.
-      th = get_bucket(e, b)
-      if (nrow(th)>2) { ngdf = count_ngrams(th, 'threadNum', cf, n_gram_size)[1:2]  }  
+      th = e[ e[[bucket_col]] ==b , ] 
+      if (nrow(th)>3) { ngdf = count_ngrams(th, 'threadNum', cf, n_gram_size)[1:2]  }  
       
       
       nodes = length(unique(th[[cf]]))
@@ -103,13 +97,12 @@ graph_trajectory_filtered  <- function(e, bucketCF, cf, n_gram_size=2, reference
     
     # add the bucket number and name
     ngdf$bid = bcount
-    # ngdf$bname = b
+    ngdf$bname = b
     
     # append the columns to the end
     # vt is the whole set of all ngrams in all the windows
     vt=rbind(vt,ngdf)
   }
-   print(head(complexity_idx))
 
    
   # convert to factor
@@ -145,7 +138,7 @@ graph_trajectory_filtered  <- function(e, bucketCF, cf, n_gram_size=2, reference
     # fm = windowFreqMatrix/max(windowFreqMatrix)
     # 
     # # if the number if below the threshold, set it to zero
-    # windowFreqMatrix[fm<=f] = 0
+    # windowFreqMatrix[fm<=filter_threshold] = 0
 
     df = data.frame( t(sapply( 1:(nWindows-1), 
                                   function(i){
@@ -154,25 +147,26 @@ graph_trajectory_filtered  <- function(e, bucketCF, cf, n_gram_size=2, reference
                                     Clinic = unlist(strsplit(blist[i],'_'))[1],
                                     ymd =  unlist(strsplit(blist[i],'_'))[2],
                                     pct_retained = sum((windowFreqMatrix[i,]>0)+(windowFreqMatrix[i+1,]>0)==2)/sum(windowFreqMatrix[i,]>0),
-                                    pct_possible = sum(windowFreqMatrix[i,] > 0)/Max_Order,
                                     complexity = estimate_task_complexity_index( nodes ,sum(windowFreqMatrix[i,] > 0) ),
                                     Dist_from_reference = distance(rbind(windowFreqMatrix[i,],windowFreqMatrix[reference_day,]), method='cosine' ),
                                     Dist_from_next = distance(rbind(windowFreqMatrix[i,],windowFreqMatrix[i+1,]), method='cosine' )
                                     )
                                   })))
   
-    ##### maybe use merge to get other variables included?  Or do that outside the function...
+    
+ # get the ngram data and labels
+    if (keep_ngram_vectors) {
+            b_df=as.data.frame(windowFreqMatrix[1:(nWindows-1),])
+            colnames(b_df)=vt_unique$ngrams
   
+            # stick the ngram frequencies on the end for good measure
+            df = cbind(df,b_df)
+    }
+    
+  # save the result and return it, too
   save(df, file=paste0(save_file_name,'.rData') )
   
- return(df)
-  
-  # get the ngram data and labels
-  # b_df=as.data.frame(windowFreqMatrix[1:(nWindows-1),])
-  # colnames(b_df)=vt_unique$ngrams
-  # 
-  # # stick the ngram frequencies on the end for good measure
-  # return(cbind(df,b_df))
+  return(df)
 
 }
 

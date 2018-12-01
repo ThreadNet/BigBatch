@@ -15,29 +15,19 @@
 # 2) By Clinic_day
   
 
-
-#############################################################################################
-# Functions to make buckets
-# Each bucket is a list of thread numbers that can be used to subset the list of occurrences
-# Need be careful how you call thus because it can aggregate threads in unexpected ways
-# For example, if you want Visit_ID_Role, use criteria = threadNum on the appropriately threaded input
-make_buckets_1 <- function(o, criteria){
-  
-  return( unique(o[[criteria]]) )
-  
-}
-
-
 ###################################################################
 ###################################################################
 # This is function is set up to aggregate the occurrences within threads -- typically visits
 # occ = pre-processed threaded occurrences
 # TN = threadNum in most cases
-# CFs can be chosen -- they don't have to match the POV
+# CFs can be chosen
+# event_CFs define changes within threads
+# ALL_CFs are used to computer the CF_alignment
+
 
 #  need to bring Role_ID forward when looking at Visit_Role, so we can track residents over time.
 
-ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
+ACHR_batch_threads <- function(occ,THREAD_CFs, EVENT_CFs, ALL_CFs) {
   
   library(tidyr)
   library(dplyr)
@@ -48,28 +38,37 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
   library(data.table)
   
   # Add  columns for combinations of CFs if needed
+  thread_col = newColName(THREAD_CFs)
+  TN = thread_col
+  if  (!(thread_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,THREAD_CFs,thread_col) }
+
+  
   new_event_col = newColName(EVENT_CFs)
   if  (!(new_event_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CFs,new_event_col) }
  
   all_cf_col = newColName(ALL_CFs)
   if  (!(all_cf_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,ALL_CFs,all_cf_col) } 
   
+  # set key on the data.table
+  setkeyv(occ, TN)
+  
   # get the list of buckets
-  bucket_list <- make_buckets_1(occ, TN)
+  bucket_list <- unique(occ[[TN]])
   
   # print the number of buckets
   print(paste0('Number of buckets=', length(bucket_list)  ))
   
   
   # make data frame with results
- Thrds = data.frame( t(sapply( bucket_list, 
+ Thrds = data.table( t(sapply( bucket_list, 
                            function(b){
                              
                              # select a subset 
-                             df = occ[ occ[[TN]] ==b , ] 
+                             df= occ[get(TN)==b]
+                    
+                            # make sure it  is sorted by timestamp
+                             df=df[order(df$tStamp),]
                              
-                            # Only run for visits with more than two occurrences
-                        
                              # get the network -- only if there are enough rows...
                              
                               if (nrow(df)>2)   n = threads_to_network_original(df,TN, new_event_col) 
@@ -78,24 +77,25 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
                              # compute each parameter and put them in a vector
                              c(
                                bucket=b,
-                               Clinic = df[1,'Clinic'],
-                               Physician  = as.character(df[1,'Physician']),
-                               ymd = df[1,'ymd'],
-                               Clinic_ymd = df[1,'Clinic_ymd'],
-                               Weekday  = df[1,'Weekday'],
-                               Month  = df[1,'Month'],
+                               Clinic = as.character(df$Clinic[1]),
+                               Physician  = as.character(df$Physician[1]),
+                               ymd = as.character(df$ymd[1]),
+                               Clinic_ymd = as.character(df$Clinic_ymd[1]),
+                               Weekday  = as.character(df$Weekday[1]),
+                               Month  = as.character(df$Month[1]),
                                Phase =  compute_phase(df$tStamp[1]),
-                               threadNum = df[1,'threadNum'],
-                               Visit_ID  = df[1,'Visit_ID'],
-                               Subject_ID  = df[1,'Subject_ID'],
-                               Role_ID = as.character( df[1,'Role_ID'] ),
+                               threadNum = as.numeric(df$threadNum[1]),
+                               Visit_ID  = as.character(df$Visit_ID[1]),
+                               Subject_ID  = as.character( df$Subject_ID[1] ),
+                               Role_ID = as.character( df$Role_ID[1] ),
                                NEvents = nrow(df),
-                               ThreadStart= as.character( df[1,'tStamp'] ),
-                               ThreadStartInt = df[1,'tStamp'],
-                               ThreadDuration= difftime(max(lubridate::ymd_hms(df$tStamp)),  min(lubridate::ymd_hms(df$tStamp)), units='hours' ),
-                               wait_time = compute_wait_time(df),
-                               #   Visit_number = integer(N),
-                               #   LOC_CPT =  character(N),
+                               ThreadStart= as.character(df$tStamp[1] ),
+                               ThreadDuration= compute_thread_duration(df), 
+                               VisitDuration= compute_visit_duration(df), 
+                               wait_time1 = compute_wait_time1(df),
+                               wait_time2 = compute_wait_time2(df),
+                               Visit_number = as.numeric(df[1,'Visitnum_Total']),
+                               LOC_CPT =  as.character(df[1,'LOS_CPT']),
                                NetComplexity=estimate_network_complexity( n ),
                                Nodes=nrow(n$nodeDF),
                                Edges=nrow(n$edgeDF),
@@ -105,7 +105,7 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
                                NumDiagnoses = count_diagnoses(df$Diag[1]),
                                Proc = as.character(df[1,'Proc']),
                                Diagnosis = as.character(df[1,'Diag']),    
-                               Diagnosis_group  = df[1,'Diagnosis_Group'],
+                               Diagnosis_group  = as.character(df[1,'Diagnosis_Group']),
                                CF_Alignment = 1,    # make placeholder, but compute below
                                ALL_CF_count = length(unique(df[[all_cf_col]])),
                                ALL_CF_entropy = compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]), 
@@ -136,7 +136,10 @@ ACHR_batch_threads <- function(occ,TN, EVENT_CFs, ALL_CFs) {
  # Compute the alignment of the context factors
  Thrds$CF_Alignment =  as.numeric( as.character(Thrds$Action_count)) / as.numeric( as.character(Thrds$ALL_CF_count ))
  
- save(Thrds, file=paste0(paste('Thrds',TN,new_event_col,sep='+'), '.Rdata'))
+ save_file_name = paste0(paste('Thrds',TN,new_event_col,sep='+'), '.Rdata')
+ save(Thrds, file=save_file_name)
+ 
+ print(paste('Saved ', nrow(Thrds), " records in ",save_file_name))
  
  return(Thrds) 
   
@@ -163,32 +166,86 @@ compute_phase <- function(t){
     return(NA)
 
 }
-
-# alignment is a measure of how much the number of nodes is increased by adding context factors
-# always base this on the "Action" -- how many more "actions" are there? 
-# could also do this based on entropy, or write the function to use the values that were already computed
-# compute_alignment <- function(df,TN, EVENT_CFs, ALL_CFs ){
-#   
-#   # first get numerator
-#   n= length(unique(df$Action))
-#   
-#   # Now get the total number with all  of the CFs  
-#   m= length(unique( df[[newColName(EVENT_CFs)]]))
-# 
-#   return(n/m)
-# }
-
-
-# NEEDS WORK!!  Far too simplistic. 
-compute_wait_time <- function(df){
+compute_thread_duration <- function(df){
   
-  #  find the first  occurrence of the chief complain.  Seems to correspond closely to wait time
-  #  Make sure it's not in the first 5 occurrences, and make sure to  return a  value of at least 1 if it never occurs
-  w= grep('MR_VN_CHIEF_COMPLAINT',df$Action)[1]
+  return(difftime(lubridate::ymd_hms(df$tStamp[nrow(df)]),  lubridate::ymd_hms(df$tStamp[1]), units='hours' ))
+  
+}
+
+compute_visit_duration <- function(df){
+  
+  # get the checkin time.  Note that they sometimes look at patient data in advance of the visit, so you 
+  # cannot use the first occurrences to mark the start of the thread
+  w1= grep('CHECKIN_TIME',df$Action)[1]
+  w2= grep('AVS_PRINT_TIME',df$Action)[1]
+  
+  return(difftime(lubridate::ymd_hms(df$tStamp[w2]),  lubridate::ymd_hms(df$tStamp[w1]), units='hours' ))
+  
+}
+
+# First wait time... from checkin until they get their vitals taken
+compute_wait_time1 <- function(df){
+  
+  #  find the first  occurrence of MR_VN_VITALS. Corresponds closely to wait time
+ # w= grep('MR_VN_VITALS',df$Action)[1]
+  w= grep('VITALS',df$Action)[1]
   
   return( difftime( lubridate::ymd_hms(df$tStamp[w]),lubridate::ymd_hms(df$tStamp[1]),  units='hours' ) )
    
 }
+
+# Second wait time... from  vitals until they see a doctor or other medical person
+compute_wait_time2 <- function(df){
+  
+  #  find the first  occurrence of MR_VN_VITALS. Get the time t1
+ # w1= grep('MR_VN_VITALS',df$Action)[1]
+  w1= grep('VITALS',df$Action)[1]
+  
+  if (is.na(w1))
+    return(NA)
+  else
+  {
+  t1 = lubridate::ymd_hms(df$tStamp[w1])
+  
+  
+  # get the workstation and role used for the vitals at t1
+  work1 = df$Workstation[w1]
+  role1 = df$Role[w1]
+  
+  # get set of actions at the same workstation or different workstations that happen later in the visit
+  # Truncate the visit up to w1
+  restdf = df[w1:nrow(df),]
+
+  # then get the set of action at the same workstation or different workstations (in that visit)
+  sameWS =  restdf[restdf$Workstation == work1,]
+  differentWS =  restdf[restdf$Workstation != work1,]
+  
+  # get list of other roles
+  otherRoles = paste(setdiff(unique(restdf$Role),c('Technician','Technologist','Staff','Unknown')),
+                    collapse = '|')
+  
+  # Now find the marker for when they see a physician
+  # procedure is differenrt in BRKPT and HHPOB clinics
+  if (df$Clinic[1]  %in% c('BRKPT','HHPOB') )
+    { # LPN brings a different workstation on wheels at these clinics  
+    firstLPN =  grep('LPN',differentWS$Role)[1] 
+    t2 = lubridate::ymd_hms(differentWS$tStamp[firstLPN])
+    
+    # Other roles use the same workstation
+    firstDoc =  grep('Physician|Resident|Registered', sameWS$Role)[1] 
+    t2 = lubridate::ymd_hms(sameWS$tStamp[firstDoc])
+    }
+  else 
+  {  # a different role, using the same workstation 
+    w2 = max(w1, grep(otherRoles, sameWS$Role) )[1]
+    t2 = lubridate::ymd_hms(sameWS$tStamp[w2])
+    }
+    
+  # return the difference in time from t1 to t2
+  return( difftime( t2, t1,  units='hours' ) )
+  }
+}
+
 
 # THIS ONE IS GOOD.
 count_procedures <- function( p ){
@@ -228,10 +285,7 @@ count_diagnoses <- function(d){
 # This is function is set up to aggregate the occurrences among collections of visit -- typically clinic_days
 # occ = pre-processed threaded occurrences
 # TN = threadNum in most cases
-# CFs can be chosen -- they don't have to match the POV
-
-#  need to bring Role_ID forward when looking at Visit_Role, so we can track residents over time.
-
+# CFs can be chosen  
 ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
   
   library(tidyr)
@@ -242,7 +296,7 @@ ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
   library(stringr)
   library(data.table)
   
-  # make a list of unique buckets.  Typical example
+  # make a list of unique buckets.   
   bucket_list <- unique(occ[[TN]])
   
   # print the number of buckets
@@ -257,7 +311,7 @@ ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
   
   
   # make data frame with results
- cds = data.frame( t(sapply( bucket_list, 
+ cds = data.table( t(sapply( bucket_list, 
                                 function(b){
                                   
                                   # select a subset of occurrences for the bucket
@@ -640,14 +694,4 @@ ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
 #   # return the table
 #   return(ACHR)
 # }
-
-# 
-# make_box_plots <- function(){
-# ggboxplot(ACHR_test[NEvents>100 & Clinic=='DRH'], x = "VisitMonth", y = "NetComplexity",
-#           color = "VisitDay",
-#           ylab = "Complexity", xlab = "Month (DRH)")
-# }
-# 
-
-
 
