@@ -37,10 +37,120 @@ plots_for_papers <- function(){
   ggplot(data = cds, aes(x = ymd, y = Dist_from_reference, group=Clinic)) + geom_line(aes(color=Clinic))
   ggplot(data = cds, aes(x = ymd, y = rollmean(Dist_from_reference,5,na.pad=TRUE), group=Clinic)) + geom_line(aes(color=Clinic))
   
+  # Dec 6th version 
+  ggplot(data = cdt, aes(x = ymd.x, y = Dist_from_reference, group=Clinic.x)) + 
+    geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank(), axis.text.y=element_blank())
+
+    ggplot(data = cdt, aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+    geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank(), axis.text.y=element_blank())
+    
+    ggplot(data = cdt, aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    
+  
+  
   # ROle change over time
   ggplot(data = cds, aes(x = ymd, y = Dist_from_reference, group=Role)) + geom_line(aes(color=Role))
   
+  # get the wait times and visit duration for each clinic
+  # convert to minutes. 
+ a= visits  %>% 
+    group_by(Clinic) %>%
+    summarize(n = n(),
+              NEvents = mean(NEvents, na.rm = TRUE),
+              wait1 = mean(wait1*60, na.rm = TRUE),
+              sdwait1 = sd(wait1*60, na.rm = TRUE),
+              wait2 = mean(wait2*60, na.rm = TRUE),
+              sdwait2 = sd(wait2*60, na.rm = TRUE),
+              Duration  = mean(VisitDuration, na.rm = TRUE)
+              )
+  
+ # For some reason, the sd function was not working correctly above...  do it again here. 
+ visits  %>% 
+    group_by(Clinic) %>%
+    summarize(n = n(),
+              sdwait1 = sd(wait1*60, na.rm = TRUE),
+              sdwait2 = sd(wait2*60, na.rm = TRUE)
+    )
+  
+  # get the precentage of actions by role... based on occurrences
+ Clinic_role_pct = otr %>%
+    group_by(Clinic, Role)  %>%
+    summarize(n=n()) %>%
+    mutate(RolePct = n/sum(n))
+    
+ # get LOS by clinic based on visits
+ Clinic_LOS_pct = visits %>%
+   group_by(Clinic, LOS_CPT)  %>%
+   summarize(n=n()) %>%
+   mutate(LOSPct = n/sum(n)) %<%
+   spread(Clinic, Role)
+ 
+ # Make contingency table Clinic x  LOS
+ C_LOS = visits %>%
+   group_by(Clinic, LOS_CPT)  %>%
+   summarize(n=n()) %>%
+   spread( LOS_CPT,n)
+ 
+ # Convert NA to zero and then convert to table. Carefully remove  rows/cols that make no sense
+ C_LOS= as.data.frame(C_LOS)
+ C_LOS[is.na(C_LOS)] =0
+ C_LOS = matrix(unlist(C_LOS), nrow=6, ncol=20)[1:5,2:19]
+ chisq.test(C_LOS)
+ 
+
+# Make contingency table Clinic x  Role
+C_R = otr %>%
+  group_by(Clinic, Role)  %>%
+  summarize(n=n()) %>%
+  spread( Role, n)
+
+# Convert NA to zero
+C_R = as.data.frame(C_R)
+C_R[is.na(C_R)] =0
+C_R = matrix(unlist(C_R), nrow=5, ncol=10)[1:5,2:10]
+chisq.test(C_R)
+
+ Clinic_staffing = otr %>%
+  group_by(Clinic,Role)  %>%
+  summarize(total_staff=n_distinct(Role_ID)) %>%
+  spread( Role, total_staff)
+ 
+ 
+ # Get the handoffs per visit.  Use the distinct chunks in the Visit-Role threads (VRThrds)
+ Role_Handoffs = VRThrds %>%
+   group_by(Clinic,Visit_ID) %>%
+   summarize(ho = n_distinct(threadNumVR))
+
+ Role_Handoffs_by_clinic = Role_Handoffs %>%
+   group_by(Clinic) %>%
+   summarize(avg_ho = mean(ho), 
+             median_ho = median(ho),
+             max_ho = max(ho),
+             sd_ho = sd(ho))
+ 
+ # get the average staffing levels per day
+ Clinic_daily_staffing = otr %>%
+   group_by(Clinic,ymd,Role)  %>%
+   summarize(total_staff=n_distinct(Role_ID)) 
+ 
+ Clinic_AVG_daily_staffing = Clinic_daily_staffing %>%
+   group_by(Clinic,Role)  %>%
+   summarize(AVG_staff=mean(total_staff))  %>%
+   spread( Role, AVG_staff)
+ 
 }
+
+
+remove_outliers <- function(x, na.rm = TRUE, ...) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
+  H <- 1.5 * IQR(x, na.rm = na.rm)
+  y <- x
+  y[x < (qnt[1] - H)] <- NA
+  y[x > (qnt[2] + H)] <- NA
+  y
+}
+
 
 # 
 # make_box_plots <- function(){

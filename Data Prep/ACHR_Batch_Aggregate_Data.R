@@ -30,9 +30,8 @@
 # ALL_CFs are used to computer the CF_alignment
 
 
-#  need to bring Role_ID forward when looking at Visit_Role, so we can track residents over time.
 
-ACHR_batch_threads <- function(occ,THREAD_CFs, EVENT_CFs, ALL_CFs) {
+ACHR_batch_threads <- function(occ, EVENT_CFs, ALL_CFs) {
   
   library(tidyr)
   library(dplyr)
@@ -42,121 +41,325 @@ ACHR_batch_threads <- function(occ,THREAD_CFs, EVENT_CFs, ALL_CFs) {
   library(stringr)
   library(data.table)
   
+  
+  # get the first occurrence from each thread -- this will be used for the stuff that never changes, like clinic
+  firstOcc=occ[occ$seqNum==1,]
+  
+  # always used threadNum for the TN
+  TN = 'threadNum'
+  
   # Add  columns for combinations of CFs if needed
-  thread_col = newColName(THREAD_CFs)
-  TN = thread_col
-  if  (!(thread_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,THREAD_CFs,thread_col) }
-
+  # don't need to add new column for the thread_CFs.  That one has to be here.
+  # thread_col = newColName(THREAD_CFs)
+  # TN = thread_col
+  # if  (!(thread_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,THREAD_CFs,thread_col) }
   
   new_event_col = newColName(EVENT_CFs)
   if  (!(new_event_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CFs,new_event_col) }
- 
+  
   all_cf_col = newColName(ALL_CFs)
   if  (!(all_cf_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,ALL_CFs,all_cf_col) } 
   
-  # set key on the data.table
+  # set key on the data.table for the threadNum
+  occ=as.data.table(occ)
   setkeyv(occ, TN)
   
   # get the list of buckets
-  bucket_list <- unique(occ[[TN]])
+  bucket_list <- sort( unique(occ[[TN]]) )
   
-  # print the number of buckets
-  print(paste0('Number of buckets=', length(bucket_list)  ))
+  # get the number of buckets
+  N = length(bucket_list)
+  print(paste0('Number of buckets=', N  ))
   
+  # allocate the data table with N rows, then for speed, we use := to update it.
+  ACHR = data.table(threadNum =  integer(N),
+                    Phase  = character(N), 
+                    NEvents = integer(N),
+                    ThreadDuration =double(N),
+                    VisitDuration= double(N),
+                    wait_time1 = double(N),
+                    wait_time2 = double(N),
+                    NetComplexity=double(N),
+                    Nodes=double(N),
+                    Edges=double(N),
+                    CompressRatio = double(N),
+                    Entropy = double(N),
+                    NumProcedures = double(N),
+                    NumDiagnoses = double(N),
+                    ALL_CF_count =  integer(N),
+                    ALL_CF_entropy = double(N),
+                    CF_Alignment = double(N) )
+
+    # Now add columns for the CF counts.  
+    for (cf in ALL_CFs){
+      ACHR[, paste0(cf,"_count"):= double(N)]
+      # ACHR[, paste0(cf,"_compression"):= double(N)]
+      # ACHR[, paste0(cf,"_entropy"):= double(N)]
+    }
   
-  # make data frame with results
- Thrds = data.table( t(sapply( bucket_list, 
-                           function(b){
-                             
-                             # select a subset 
-                             df= occ[get(TN)==b]
-                    
-                            # make sure it  is sorted by timestamp
-                             df=df[order(df$tStamp),]
-                             
-                             # get the network -- only if there are enough rows...
-                             
-                              if (nrow(df)>2)   n = threads_to_network_original(df,TN, new_event_col) 
-                              else  n = list(edgeDF=t(c(0)),nodeDF=t(c(0)))
-                             
-                             # compute each parameter and put them in a vector
-                             c(
-                               bucket=b,
-                               Clinic = as.character(df$Clinic[1]),
-                               Physician  = as.character(df$Physician[1]),
-                               ymd = as.character(df$ymd[1]),
-                               Clinic_ymd = as.character(df$Clinic_ymd[1]),
-                               Weekday  = as.character(df$Weekday[1]),
-                               Month  = as.character(df$Month[1]),
-                               Phase =  compute_phase(df$tStamp[1]),
-                               threadNum = as.numeric(df$threadNum[1]),
-                               Visit_ID  = as.character(df$Visit_ID[1]),
-                               Subject_ID  = as.character( df$Subject_ID[1] ),
-                               Role_ID = as.character( df$Role_ID[1] ),
-                               NEvents = nrow(df),
-                               ThreadStart= as.character(df$tStamp[1] ),
-                               ThreadDuration= compute_thread_duration(df), 
-                               VisitDuration= compute_visit_duration(df), 
-                               wait_time1 = compute_wait_time1(df),
-                               wait_time2 = compute_wait_time2(df),
-                               Visit_number = as.numeric(df[1,'Visitnum_Total']),
-                               LOC_CPT =  as.character(df[1,'LOS_CPT']),
-                               NetComplexity=estimate_network_complexity( n ),
-                               Nodes=nrow(n$nodeDF),
-                               Edges=nrow(n$edgeDF),
-                               CompressRatio = compression_index(df,new_event_col),
-                               Entropy = compute_entropy(table(df[[new_event_col]])[table(df[[new_event_col]])>0]),
-                               NumProcedures = count_procedures(df$Proc[1]),
-                               NumDiagnoses = count_diagnoses(df$Diag[1]),
-                               Proc = as.character(df[1,'Proc']),
-                               Diagnosis = as.character(df[1,'Diag']),    
-                               Diagnosis_group  = as.character(df[1,'Diagnosis_Group']),
-                               CF_Alignment = 1,    # make placeholder, but compute below
-                               ALL_CF_count = length(unique(df[[all_cf_col]])),
-                               ALL_CF_entropy = compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]), 
-                             
-                             # name these columns afterwards
-                             sapply(ALL_CFs, function(cf){
-                               c( length(unique(df[[cf]]))
-                                  # ,
-                                  # compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) 
-                                  ) })
-                             
-                             )
-                      } )))
- 
- 
- # name the last columns -- code has to match above
- cn =  as.vector(sapply(ALL_CFs, function(cf){
-   c( paste0(cf,"_count")
-    #   ,  
-    # paste0(cf,"_entropy") 
-    ) }))
- 
- # now assign them to the last columns
- last_col = ncol(Thrds)
- first_col= last_col-length(cn)+1
- setnames(Thrds, c(first_col:last_col), cn)
- 
- # Compute the alignment of the context factors
- Thrds$CF_Alignment =  as.numeric( as.character(Thrds$Action_count)) / as.numeric( as.character(Thrds$ALL_CF_count ))
- 
- save_file_name = paste0(paste('Thrds',TN,new_event_col,sep='+'), '.Rdata')
- save(Thrds, file=save_file_name)
- 
- print(paste('Saved ', nrow(Thrds), " records in ",save_file_name))
- 
- return(Thrds) 
+  # update data table with results - only compute the ones that require looking at the whole thread
+  for (b in 1:N){
+    
+    if (b %% 1000 ==0) print(paste0('Thread count =  ',b))
+    
+    # select a subset 
+    df= occ[get(TN)==bucket_list[b]]
+    
+    # make sure it is sorted by timestamp
+    df=df[order(df$tStamp),]
+    
+    # get the network -- only if there are enough rows...
+    if (nrow(df)>2)   n = threads_to_network_original(df,TN, new_event_col) 
+    else  n = list(edgeDF=t(c(0)),nodeDF=t(c(0)))
+    
+    # compute each parameter and update the table
+    ACHR[b,threadNum := bucket_list[b] ]
+    ACHR[b,Phase :=  compute_phase(df$tStamp[1])]
+    ACHR[b,NEvents := nrow(df) ]
+    ACHR[b,ThreadDuration:= compute_thread_duration(df) ] 
+    ACHR[b,VisitDuration:= compute_visit_duration(df) ] 
+    ACHR[b, wait_time1 := compute_wait_time1(df) ]
+    ACHR[b, wait_time2 := compute_wait_time2(df) ]
+    ACHR[b, NetComplexity:=estimate_network_complexity( n ) ]
+    ACHR[b, Nodes:=nrow(n$nodeDF) ]
+    ACHR[b,Edges:=nrow(n$edgeDF) ]
+    ACHR[b,CompressRatio := compression_index(df,new_event_col) ]
+    ACHR[b,Entropy := compute_entropy(table(df[[new_event_col]])[table(df[[new_event_col]])>0]) ]
+    ACHR[b,NumProcedures := count_procedures(df$Proc[1]) ]
+    ACHR[b,NumDiagnoses := count_diagnoses(df$Diag[1]) ]
+    ACHR[b,ALL_CF_count := length(unique(df[[all_cf_col]])) ]
+    ACHR[b,ALL_CF_entropy := compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]) ] 
+    
+    # Count the unique elements in each cf  
+    for (cf in ALL_CFs){  ACHR[b, paste0(cf,"_count") :=  length(unique(df[[cf]])) ] }
+  } 
   
+  # Compute the alignment of the context factors
+  ACHR$CF_Alignment =  as.numeric( as.character(ACHR$Action_count)) / as.numeric( as.character(ACHR$ALL_CF_count ))
+  
+  # Merge the results with the first row from each thread
+  print('Merging results...')
+  Thrds=merge(x=ACHR, y=firstOcc, by.x='threadNum', by.y ='threadNum' ,all=TRUE) 
+  
+  save_file_name = paste0(paste('Thrds',TN,new_event_col,sep='+'), '.Rdata')
+  save(Thrds, file=save_file_name)
+  
+  print(paste('Saved ', nrow(Thrds), " records in ",save_file_name))
+  
+  return(Thrds) 
 }
 
+#################################################################################
+# streamlined version for threads that are PART OF A VISIT.  So you can merge with visits
+# to get the visit context.  Just compute the minimum for speed.
+ACHR_batch_visit_role_threads <- function(occ, EVENT_CFs, ALL_CFs, visits) {
+  
+  library(tidyr)
+  library(dplyr)
+  library(ThreadNet)
+  library(ngram)
+  library(lubridate)
+  library(stringr)
+  library(data.table)
+  
+  
+  # get the first occurrence from each thread -- this will be used for the stuff that never changes, like clinic
+ # firstOcc=occ[occ$seqNum==1,]
+  
+  # always used threadNum for the TN
+  TN = 'threadNum'
+  
+  # Add  columns for combinations of CFs if needed
+  # don't need to add new column for the thread_CFs.  That one has to be here.
+  # thread_col = newColName(THREAD_CFs)
+  # TN = thread_col
+  # if  (!(thread_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,THREAD_CFs,thread_col) }
+  
+  new_event_col = newColName(EVENT_CFs)
+  if  (!(new_event_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CFs,new_event_col) }
+  
+  all_cf_col = newColName(ALL_CFs)
+  if  (!(all_cf_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,ALL_CFs,all_cf_col) } 
+  
+  # set key on the data.table for the threadNum
+  occ=as.data.table(occ)
+  setkeyv(occ, TN)
+  
+  # get the list of buckets
+  bucket_list <- sort( unique(occ[[TN]]) )
+  
+  # get the number of buckets
+  N = length(bucket_list)
+  print(paste0('Number of buckets=', N  ))
+  
+  # allocate the data table with N rows, then for speed, we use := to update it.
+  ACHR = data.table(Visit_ID  = character(N), 
+                    Role_VR = character(N), 
+                    Role_ID_VR =  character(N), 
+                    threadNumVR =  integer(N),
+                    NEventsVR = integer(N),
+                    threadStartVR =  character(N), 
+                    ThreadDurationVR =double(N),
+                    NetComplexityVR=double(N),
+                    NodesVR=double(N),
+                    EdgesVR=double(N),
+                    CompressRatioVR = double(N),
+                    EntropyVR = double(N),
+                    ALL_CF_countVR =  integer(N),
+                    ALL_CF_entropyVR = double(N) )
+  
+  # Now add columns for the CF counts.  
+  for (cf in ALL_CFs){
+    ACHR[, paste0(cf,"_countVR"):= double(N)]
+    # ACHR[, paste0(cf,"_compression"):= double(N)]
+    # ACHR[, paste0(cf,"_entropy"):= double(N)]
+  }
+  
+  # update data table with results - only compute the ones that require looking at the whole thread
+  for (b in 1:N){
+    
+    if (b %% 1000 ==0) print(paste0('Thread count =  ',b))
+    
+    # select a subset 
+    df= occ[get(TN)==bucket_list[b]]
+    
+    # get the network -- only if there are enough rows...
+    if (nrow(df)>2)   n = threads_to_network_original(df,TN, new_event_col) 
+    else  n = list(edgeDF=t(c(0)),nodeDF=t(c(0)))
+    
+    # compute each parameter and update the table
+    ACHR[b,Visit_ID := as.character(df$Visit_ID[1]) ]
+    ACHR[b,Role_VR:= as.character(df$Role[1]) ]
+    ACHR[b,Role_ID_VR:= as.character(df$Role_ID[1]) ]
+    ACHR[b,threadNumVR := bucket_list[b] ]
+    ACHR[b,NEventsVR := nrow(df) ]
+    ACHR[b,threadStartVR := as.character(min(lubridate::ymd_hms(df$tStamp))) ]
+    ACHR[b,ThreadDurationVR:= difftime(max(lubridate::ymd_hms(df$tStamp)),  min(lubridate::ymd_hms(df$tStamp)), units='hours' ) ] 
+    ACHR[b, NetComplexityVR:=estimate_network_complexity( n ) ]
+    ACHR[b, NodesVR:=nrow(n$nodeDF) ]
+    ACHR[b,EdgesVR:=nrow(n$edgeDF) ]
+    ACHR[b,CompressRatioVR := compression_index(df,new_event_col) ]
+    ACHR[b,EntropyVR := compute_entropy(table(df[[new_event_col]])[table(df[[new_event_col]])>0]) ]
+    ACHR[b,ALL_CF_countVR := length(unique(df[[all_cf_col]])) ]
+    ACHR[b,ALL_CF_entropyVR := compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]) ] 
+    
+    # Count the unique elements in each cf  
+    for (cf in ALL_CFs){  ACHR[b, paste0(cf,"_countVR") :=  length(unique(df[[cf]])) ] }
+  } 
+  
+  # Compute the alignment of the context factors
+ #  ACHR$CF_AlignmentVR =  as.numeric( as.character(ACHR$Action_countVR)) / as.numeric( as.character(ACHR$ALL_CF_countVR ))
+  
+  # Merge the results with the first row from each thread
+  print('Merging results...')
+  VRThrds=merge(x=ACHR, y=visits, by.x='Visit_ID', by.y ='Visit_ID' ,all=TRUE) 
+  
+  save_file_name = paste0(paste('VRThrds',TN,new_event_col,sep='+'), '.Rdata')
+  save(VRThrds, file=save_file_name)
+  
+  print(paste('Saved ', nrow(VRThrds), " records in ",save_file_name))
+  
+  return(VRThrds) 
+}
 
-
-get_timeScale <- function(){'hr'}
-
-
-
-# Need to write all  these functions
+#################################################################################
+# streamlined version for adding or recomputing columns that describe a visit.  
+# So you can merge with visits to get rest of the columns.  Just compute the minimum for speed.
+# Can re-write this as needed... 
+ACHR_batch_visit_add_columns <- function(occ, EVENT_CFs, visits) {
+  
+  library(tidyr)
+  library(dplyr)
+  library(ThreadNet)
+  library(ngram)
+  library(lubridate)
+  library(stringr)
+  library(data.table)
+  
+  
+  # get the first occurrence from each thread -- this will be used for the stuff that never changes, like clinic
+  # firstOcc=occ[occ$seqNum==1,]
+  
+  # always used threadNum for the TN
+  TN = 'threadNum'
+  
+  # Add  columns for combinations of CFs if needed
+  # don't need to add new column for the thread_CFs.  That one has to be here.
+  # thread_col = newColName(THREAD_CFs)
+  # TN = thread_col
+  # if  (!(thread_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,THREAD_CFs,thread_col) }
+  
+  new_event_col = newColName(EVENT_CFs)
+  if  (!(new_event_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CFs,new_event_col) }
+  
+ 
+  # set key on the data.table for the threadNum
+  occ=as.data.table(occ)
+  setkeyv(occ, TN)
+  
+  # get the list of buckets
+  bucket_list <- sort( unique(occ[[TN]]) )
+  
+  # get the number of buckets
+  N = length(bucket_list)
+  print(paste0('Number of buckets=', N  ))
+  
+  # allocate the data table with N rows, then for speed, we use := to update it.
+  ACHR = data.table(Visit_ID  = character(N), 
+                    new_wait_time1 = double(N),
+                    new_wait_time2 = double(N) )
+                    
+                    # Role_VR = character(N), 
+                    # Role_ID_VR =  character(N), 
+                    # threadNumVR =  integer(N),
+                    # NEventsVR = integer(N),
+                    # threadStartVR =  character(N), 
+                    # ThreadDurationVR =double(N),
+                    # NetComplexityVR=double(N),
+                    # NodesVR=double(N),
+                    # EdgesVR=double(N),
+                    # CompressRatioVR = double(N),
+                    # EntropyVR = double(N),
+                    # ALL_CF_countVR =  integer(N),
+                    # ALL_CF_entropyVR = double(N) )
+  
+  
+  # update data table with results - only compute the ones that require looking at the whole thread
+  for (b in 1:N){
+    
+    if (b %% 1000 ==0) print(paste0('Thread count =  ',b))
+    
+    # select a subset 
+    df= occ[get(TN)==bucket_list[b]]
+    
+    # get the network -- only if there are enough rows...
+    # if (nrow(df)>2)   n = threads_to_network_original(df,TN, new_event_col) 
+    # else  n = list(edgeDF=t(c(0)),nodeDF=t(c(0)))
+    # 
+    # compute each parameter and update the table
+    ACHR[b,Visit_ID := as.character(df$Visit_ID[1]) ]
+    ACHR[b, new_wait_time1 := compute_wait_time1(df) ]
+    ACHR[b, new_wait_time2 := compute_wait_time2(df) ]
+  } 
+  
+  
+  # Compute the alignment of the context factors
+  #  ACHR$CF_AlignmentVR =  as.numeric( as.character(ACHR$Action_countVR)) / as.numeric( as.character(ACHR$ALL_CF_countVR ))
+  
+  # Merge the results with the first row from each thread
+  print('Merging results...')
+ # VRThrds=merge(x=ACHR, y=visits, by.x='Visit_ID', by.y ='Visit_ID' ,all=TRUE) 
+  VRThrds=merge(x=ACHR, y=visits, by.x='Visit_ID', by.y ='Visit_ID') 
+  
+  save_file_name = paste0(paste('VRThrds',TN,new_event_col,sep='+'), '.Rdata')
+  save(VRThrds, file=save_file_name)
+  
+  print(paste('Saved ', nrow(VRThrds), " records in ",save_file_name))
+  
+  return(VRThrds) 
+}
+##################################################################################
+# Helper functions
 compute_phase <- function(t){
   
   t=as.Date(t)
@@ -193,63 +396,104 @@ compute_wait_time1 <- function(df){
   
   #  find the first  occurrence of MR_VN_VITALS. Corresponds closely to wait time
  # w= grep('MR_VN_VITALS',df$Action)[1]
-  w= grep('VITALS',df$Action)[1]
   
-  return( difftime( lubridate::ymd_hms(df$tStamp[w]),lubridate::ymd_hms(df$tStamp[1]),  units='hours' ) )
+  w1= grep('CHECKIN_TIME',df$Action)[1]
+  w2= grep('VITALS',df$Action)[1]
+  
+  return( max(0, as.numeric(difftime( lubridate::ymd_hms(df$tStamp[w2]),lubridate::ymd_hms(df$tStamp[w1]),  units='hours' ) )))
    
 }
 
 # Second wait time... from  vitals until they see a doctor or other medical person
+# NEW VERSION -- look for "AC_VISIT_NAVIGATOR" by a different role than "VITALS"
 compute_wait_time2 <- function(df){
   
   #  find the first  occurrence of MR_VN_VITALS. Get the time t1
- # w1= grep('MR_VN_VITALS',df$Action)[1]
+  # w1= grep('MR_VN_VITALS',df$Action)[1]
   w1= grep('VITALS',df$Action)[1]
   
   if (is.na(w1))
     return(NA)
   else
   {
-  t1 = lubridate::ymd_hms(df$tStamp[w1])
-  
-  
-  # get the workstation and role used for the vitals at t1
-  work1 = df$Workstation[w1]
-  role1 = df$Role[w1]
-  
-  # get set of actions at the same workstation or different workstations that happen later in the visit
-  # Truncate the visit up to w1
-  restdf = df[w1:nrow(df),]
-
-  # then get the set of action at the same workstation or different workstations (in that visit)
-  sameWS =  restdf[restdf$Workstation == work1,]
-  differentWS =  restdf[restdf$Workstation != work1,]
-  
-  # get list of other roles
-  otherRoles = paste(setdiff(unique(restdf$Role),c('Technician','Technologist','Staff','Unknown')),
-                    collapse = '|')
-  
-  # Now find the marker for when they see a physician
-  # procedure is differenrt in BRKPT and HHPOB clinics
-  if (df$Clinic[1]  %in% c('BRKPT','HHPOB') )
-    { # LPN brings a different workstation on wheels at these clinics  
-    firstLPN =  grep('LPN',differentWS$Role)[1] 
-    t2 = lubridate::ymd_hms(differentWS$tStamp[firstLPN])
+    t1 = lubridate::ymd_hms(df$tStamp[w1])
     
-    # Other roles use the same workstation
-    firstDoc =  grep('Physician|Resident|Registered', sameWS$Role)[1] 
-    t2 = lubridate::ymd_hms(sameWS$tStamp[firstDoc])
-    }
-  else 
-  {  # a different role, using the same workstation 
-    w2 = max(w1, grep(otherRoles, sameWS$Role) )[1]
-    t2 = lubridate::ymd_hms(sameWS$tStamp[w2])
-    }
     
-  # return the difference in time from t1 to t2
-  return( difftime( t2, t1,  units='hours' ) )
+    # get the workstation and role used for the vitals at t1
+    # work1 = df$Workstation[w1]
+    role1 = df$Role[w1]
+    
+    # get set of actions at the same workstation or different workstations that happen later in the visit
+    # Truncate the visit up to w1
+    restdf = df[(w1+1):nrow(df),]
+    
+    # get the actions performed by other roles in the rest of the visit
+    differentRole =  restdf[restdf$Role != role1,]
+    
+    # Now look  for first instance of  AC_VISIT_NAVIGATOR that is by one of the other roles
+       # first_AC_NAV =  grep('AC_VISIT_NAVIGATOR',differentRole$Action)[1]
+       # t2 = lubridate::ymd_hms(differentRole$tStamp[first_AC_NAV])
+       
+     # Try first instance of different role. period.  
+      t2 = lubridate::ymd_hms(differentRole$tStamp[1])
+      
+      
+    # return the difference in time from t1 to t2
+    return( max(0, as.numeric(difftime( t2, t1,  units='hours' ) )))
   }
 }
+
+# Second wait time... from  vitals until they see a doctor or other medical person
+# compute_wait_time2 <- function(df){
+#   
+#   #  find the first  occurrence of MR_VN_VITALS. Get the time t1
+#  # w1= grep('MR_VN_VITALS',df$Action)[1]
+#   w1= grep('VITALS',df$Action)[1]
+#   
+#   if (is.na(w1))
+#     return(NA)
+#   else
+#   {
+#   t1 = lubridate::ymd_hms(df$tStamp[w1])
+#   
+#   
+#   # get the workstation and role used for the vitals at t1
+#   work1 = df$Workstation[w1]
+#   role1 = df$Role[w1]
+#   
+#   # get set of actions at the same workstation or different workstations that happen later in the visit
+#   # Truncate the visit up to w1
+#   restdf = df[w1:nrow(df),]
+# 
+#   # then get the set of action at the same workstation or different workstations (in that visit)
+#   sameWS =  restdf[restdf$Workstation == work1,]
+#   differentWS =  restdf[restdf$Workstation != work1,]
+#   
+#   # get list of other roles
+#   otherRoles = paste(setdiff(unique(restdf$Role),c('Technician','Technologist','Staff','Unknown')),
+#                     collapse = '|')
+#   
+#   # Now find the marker for when they see a physician
+#   # procedure is differenrt in BRKPT and HHPOB clinics
+#   if (df$Clinic[1]  %in% c('BRKPT','HHPOB') )
+#     { # LPN brings a different workstation on wheels at these clinics  
+#     firstLPN =  grep('LPN',differentWS$Role)[1] 
+#     t2 = lubridate::ymd_hms(differentWS$tStamp[firstLPN])
+#     
+#     # Other roles use the same workstation
+#     firstDoc =  grep('Physician|Resident|Registered', sameWS$Role)[1] 
+#     t2 = lubridate::ymd_hms(sameWS$tStamp[firstDoc])
+#     }
+#   else 
+#   {  # a different role, using the same workstation 
+#     w2 = max(w1, grep(otherRoles, sameWS$Role) )[1]
+#     t2 = lubridate::ymd_hms(sameWS$tStamp[w2])
+#     }
+#     
+#   # return the difference in time from t1 to t2
+#   return( difftime( t2, t1,  units='hours' ) )
+#   }
+# }
 
 
 # THIS ONE IS GOOD.
@@ -280,7 +524,19 @@ count_diagnoses <- function(d){
   return( max(1, str_count( d, '#@#' )))
 }
 
+count_daily_procedures <- function( df ) {
+  
+  # get the string of procedures for that day
+  allproc  = unlist(df[df$seqNum==1, 'Proc'])
+  
+  if (length(allproc)>0)  
+    return( sum(sapply(allproc, function(p) {count_procedures(p)} )) )
+  else return(0)
+  
+  
+}
 
+# get_timeScale <- function(){'hr'}
 
 
 
@@ -289,7 +545,6 @@ count_diagnoses <- function(d){
 ###################################################################
 # This is function is set up to aggregate the occurrences among collections of visit -- typically clinic_days
 # occ = pre-processed threaded occurrences
-# TN = threadNum in most cases
 # CFs can be chosen  
 ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
   
@@ -303,9 +558,10 @@ ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
   
   # make a list of unique buckets.   
   bucket_list <- unique(occ[[TN]])
+  N =  length(bucket_list) 
   
   # print the number of buckets
-  print(paste0('Number of buckets=', length(bucket_list)  ))
+  print(paste0('Number of buckets=', N  ))
   
   # Add  columns for combinations of CFs if needed
   new_event_col = newColName(EVENT_CFs)
@@ -314,78 +570,82 @@ ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
   all_cf_col = newColName(ALL_CFs)
   if  (!(all_cf_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,ALL_CFs,all_cf_col) } 
   
+  # this will speed up retrieving the subsets
+  setkeyv(occ, TN)
+  
+  # allocate the data table with N rows, then for speed, we use := to update it.
+  cds = data.table(Clinic_ymd  = character(N), 
+                    Clinic = character(N),
+                    ymd = character(N),
+                    Phase =  character(N), 
+                    NEvents = integer(N),
+                    ClinicDayStart =  character(N), 
+                    ClinicDayDuration =double(N),
+                    NumVisits =  integer(N),
+                    NumUniqueDiagnosisGroups = integer(N), 
+                    NumPhysicians = integer(N),
+                    TotalStaff = integer(N),
+                    NetComplexity=double(N),
+                    Nodes=double(N),
+                    Edges=double(N),
+                    CompressRatio = double(N),
+                    Entropy = double(N),
+                    ALL_CF_count =  integer(N),
+                    ALL_CF_entropy = double(N),
+                    CF_Alignment  = double(N))
+  
+  # Now add columns for the CF counts.  
+  for (cf in ALL_CFs){
+    cds[, paste0(cf,"_countVR"):= double(N)]
+    # cds[, paste0(cf,"_compression"):= double(N)]
+    # cds[, paste0(cf,"_entropy"):= double(N)]
+  }
+  
   
   # make data frame with results
- cds = data.table( t(sapply( bucket_list, 
-                                function(b){
-                                  
-                                  # select a subset of occurrences for the bucket
-                                  df = occ[ occ[[TN]] ==b , ] 
-                                  
-                                  
-                                  # get the network -- only if there are enough rows...
-                                  if (nrow(df)>2)   n = threads_to_network_original(df,TN, new_event_col) 
-                                  else  n = list(edgeDF=t(c(0)),nodeDF=t(c(0)))
-                                  
-                                  # compute each parameter and put them in a vector
-                                  c(
-                                    bucket=b,
-                                    Clinic = df[1,'Clinic'],
-                                    Physician  = as.character(df[1,'Physician']),
-                                    ymd = df[1,'ymd'],
-                                    Clinic_ymd = df[1,'Clinic_ymd'],
-                                    Weekday  = df[1,'Weekday'],
-                                    Month  = df[1,'Month'],
-                                    Phase =  compute_phase(df$tStamp[1]),
-                                    threadNum = df[1,'threadNum'],
-                                    Visit_ID  = df[1,'Visit_ID'],
-                                    Subject_ID  = df[1,'Subject_ID'],
-                                    NEvents = nrow(df),
-                                    bucketStart= as.character( df[1,'tStamp'] ),
-                                    bucketStartInt = df[1,'tStamp'],
-                                    bucketDuration= difftime(max(lubridate::ymd_hms(df$tStamp)),  min(lubridate::ymd_hms(df$tStamp)), units='hours' ),
-                                    #   wait_time = compute_wait_time(df),
-                                    #   Visit_number = integer(N),
-                                    #   LOC_CPT =  character(N),
-                                    #  NumUniqueProcedures = length(unique(df[['Proc']])
-                                    NumVisits =  length(unique(df[['Visit_ID']])),
-                                    NumUniqueDiagnosisGroups = length(unique(df[['Diagnosis_Group']])), 
-                                    NumPhysicians = length(unique(df[['Physician']])),
-                                    TotalStaff = length(unique(df[['Role_ID']])),
-                                    NetComplexity=estimate_network_complexity( n ),
-                                    Nodes=nrow(n$nodeDF),
-                                    Edges=nrow(n$edgeDF),
-                                    CompressRatio = compression_index(df,new_event_col),
-                                    Entropy = compute_entropy(table(df[[new_event_col]])[table(df[[new_event_col]])>0]),
-                                    # NumProcedures = count_procedures(df$Proc[1]),
-                                    # NumDiagnoses = count_diagnoses(df$Diag[1]),
-                                    # Diagnosis_group  = df[1,'Diagnosis_Group'],
-                                    CF_Alignment = 1,    # make placeholder, but compute below
-                                    ALL_CF_count = length(unique(df[[all_cf_col]])),
-                                    ALL_CF_entropy = compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]), 
-                                    
-                                    # name these columns afterwards
-                                    sapply(ALL_CFs, function(cf){
-                                      c( length(unique(df[[cf]]))
-                                         # ,
-                                         # compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) 
-                                         ) })
-                                    
-                                  )
-                                } )))
+ for (b in 1:N){
+   
+   
+   if (b %% 100 ==0) print(paste0('Thread count =  ',b))
+   
+   
+   # select a subset of occurrences for the bucket
+   df = occ[ occ[[TN]] == bucket_list[b]  ] 
   
   
-  # name the last columns -- code has to match above
-  cn =  as.vector(sapply(ALL_CFs, function(cf){
-    c( paste0(cf,"_count")
-       # ,  
-       # paste0(cf,"_entropy") 
-       ) }))
+  # get the network -- only if there are enough rows...
+  if (nrow(df)>2)   n = threads_to_network_original(df,TN, new_event_col) 
+  else  n = list(edgeDF=t(c(0)),nodeDF=t(c(0)))
   
-  # now assign them to the last columns
-  last_col = ncol(cds)
-  first_col= last_col-length(cn)+1
-  setnames(cds, c(first_col:last_col), cn)
+  # compute each parameter and put them in a vector
+  
+  cds[b,Clinic_ymd :=  bucket_list[b] ]
+  cds[b,Clinic := as.character( df$Clinic[1] ) ]
+  cds[b,ymd := as.character( df$ymd[1] ) ]
+  cds[b,Phase  :=   compute_phase(df$tStamp[1]) ]
+  cds[b,threadNum  :=  as.numeric(df[1,'threadNum']) ]
+  cds[b,NEvents  :=  nrow(df) ]
+  cds[b,ClinicDayStart :=  as.character(lubridate::ymd_hms(df$tStamp[1]))  ]
+  cds[b,ClinicDayDuration :=  difftime(max(lubridate::ymd_hms(df$tStamp)),  min(lubridate::ymd_hms(df$tStamp)), units := 'hours' ) ]
+  cds[b,NumVisits  :=   length(unique( df$Visit_ID )) ]
+  cds[b,NumUniqueDiagnosisGroups  :=  length(unique( df$Diagnosis_Group )) ] 
+  cds[b,NumPhysicians  :=  length(unique( df$Physician )) ]
+  cds[b,TotalStaff  :=  length(unique( df$Role_ID )) ]
+  cds[b, NetComplexity := estimate_network_complexity( n ) ]
+  cds[b,Nodes := nrow(n$nodeDF) ]
+  cds[b,Edges := nrow(n$edgeDF) ]
+  cds[b,CompressRatio  :=  compression_index(df,new_event_col) ]
+  cds[b,Entropy  :=  compute_entropy(table(df[[new_event_col]])[table(df[[new_event_col]])>0]) ]
+  cds[b,NumProceduresPerDay  :=  count_daily_procedures(df) ]
+  cds[b,CF_Alignment  :=  1 ]    # make placeholder, but compute below
+  cds[b,ALL_CF_count  :=  length(unique(df[[all_cf_col]])) ]
+  cds[b,ALL_CF_entropy  :=  compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]) ] 
+  
+  # Count the unique elements in each cf  
+  for (cf in ALL_CFs){  cds[b, paste0(cf,"_countVR") :=  length(unique(df[[cf]])) ] }
+  
+  
+} 
   
   # Compute the alignment of the context factors
   cds$CF_Alignment =  as.numeric( as.character(cds$Action_count)) / as.numeric( as.character(cds$ALL_CF_count ))
@@ -466,7 +726,7 @@ ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
 #   if (b%%100==0) {print(b)}
 #   
 #   # select the threads that go in this bucket
-#     df = occ[occ[[TN]] ==bucket_list[i],]
+#     df = occ[occ[[TN]] ==bucket_list[i] ]
 # 
 #     # bucket number
 #     ACHR[b,bucket := b]
@@ -618,7 +878,7 @@ ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
 #     if (b%%10==0) {print(b)}
 #     
 #     # select the threads that go in this bucket
-#     df = occ[occ[[BU]] ==bucket_list[i],]
+#     df = occ[occ[[BU]] ==bucket_list[i] ]
 #     
 #     # bucket number
 #     ACHR[b,bucket := b]
@@ -700,3 +960,125 @@ ACHR_batch_clinic_days <- function(occ,TN='Clinic_ymd', EVENT_CFs, ALL_CFs) {
 #   return(ACHR)
 # }
 
+
+
+#  need to bring Role_ID forward when looking at Visit_Role, so we can track residents over time.
+
+# ACHR_batch_threads_no_merge_old <- function(occ,THREAD_CFs, EVENT_CFs, ALL_CFs) {
+#   
+#   library(tidyr)
+#   library(dplyr)
+#   library(ThreadNet)
+#   library(ngram)
+#   library(lubridate)
+#   library(stringr)
+#   library(data.table)
+#   
+#   # Add  columns for combinations of CFs if needed
+#   thread_col = newColName(THREAD_CFs)
+#   TN = thread_col
+#   if  (!(thread_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,THREAD_CFs,thread_col) }
+# 
+#   
+#   new_event_col = newColName(EVENT_CFs)
+#   if  (!(new_event_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,EVENT_CFs,new_event_col) }
+#  
+#   all_cf_col = newColName(ALL_CFs)
+#   if  (!(all_cf_col  %in% colnames(occ)))  {  occ = combineContextFactors(occ,ALL_CFs,all_cf_col) } 
+#   
+#   # set key on the data.table
+#   setkeyv(occ, TN)
+#   
+#   # get the list of buckets
+#   bucket_list <- unique(occ[[TN]])
+#   
+#   # print the number of buckets
+#   print(paste0('Number of buckets=', length(bucket_list)  ))
+#   
+#   
+#   # make data frame with results
+#  Thrds = data.table( t(sapply( bucket_list, 
+#                            function(b){
+#                              
+#                              # select a subset 
+#                              df= occ[get(TN)==b]
+#                     
+#                             # make sure it  is sorted by timestamp
+#                              df=df[order(df$tStamp),]
+#                              
+#                              # get the network -- only if there are enough rows...
+#                              
+#                               if (nrow(df)>2)   n = threads_to_network_original(df,TN, new_event_col) 
+#                               else  n = list(edgeDF=t(c(0)),nodeDF=t(c(0)))
+#                              
+#                              # compute each parameter and put them in a vector
+#                              c(
+#                                bucket=b,
+#                                Clinic = as.character(df$Clinic[1]),
+#                                Physician  = as.character(df$Physician[1]),
+#                                ymd = as.character(df$ymd[1]),
+#                                Clinic_ymd = as.character(df$Clinic_ymd[1]),
+#                                Weekday  = as.character(df$Weekday[1]),
+#                                Month  = as.character(df$Month[1]),
+#                                Phase =  compute_phase(df$tStamp[1]),
+#                                threadNum = as.numeric(df$threadNum[1]),
+#                                Visit_ID  = as.character(df$Visit_ID[1]),
+#                                Subject_ID  = as.character( df$Subject_ID[1] ),
+#                                Role_ID = as.character( df$Role_ID[1] ),
+#                                NEvents = nrow(df),
+#                                ThreadStart= as.character(df$tStamp[1] ),
+#                                ThreadDuration= compute_thread_duration(df), 
+#                                VisitDuration= compute_visit_duration(df), 
+#                                wait_time1 = compute_wait_time1(df),
+#                                wait_time2 = compute_wait_time2(df),
+#                                Visit_number = as.numeric(df[1,'Visitnum_Total']),
+#                                LOC_CPT =  as.character(df[1,'LOS_CPT']),
+#                                NetComplexity=estimate_network_complexity( n ),
+#                                Nodes=nrow(n$nodeDF),
+#                                Edges=nrow(n$edgeDF),
+#                                CompressRatio = compression_index(df,new_event_col),
+#                                Entropy = compute_entropy(table(df[[new_event_col]])[table(df[[new_event_col]])>0]),
+#                                NumProcedures = count_procedures(df$Proc[1]),
+#                                NumDiagnoses = count_diagnoses(df$Diag[1]),
+#                                Proc = as.character(df[1,'Proc']),
+#                                Diagnosis = as.character(df[1,'Diag']),    
+#                                Diagnosis_group  = as.character(df[1,'Diagnosis_Group']),
+#                                CF_Alignment = 1,    # make placeholder, but compute below
+#                                ALL_CF_count = length(unique(df[[all_cf_col]])),
+#                                ALL_CF_entropy = compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]), 
+#                              
+#                              # name these columns afterwards
+#                              sapply(ALL_CFs, function(cf){
+#                                c( length(unique(df[[cf]]))
+#                                   # ,
+#                                   # compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) 
+#                                   ) })
+#                              
+#                              )
+#                       } )))
+#  
+#  
+#  # name the last columns -- code has to match above
+#  cn =  as.vector(sapply(ALL_CFs, function(cf){
+#    c( paste0(cf,"_count")
+#     #   ,  
+#     # paste0(cf,"_entropy") 
+#     ) }))
+#  
+#  # now assign them to the last columns
+#  last_col = ncol(Thrds)
+#  first_col= last_col-length(cn)+1
+#  setnames(Thrds, c(first_col:last_col), cn)
+#  
+#  # Compute the alignment of the context factors
+#  Thrds$CF_Alignment =  as.numeric( as.character(Thrds$Action_count)) / as.numeric( as.character(Thrds$ALL_CF_count ))
+#  
+#  save_file_name = paste0(paste('Thrds',TN,new_event_col,sep='+'), '.Rdata')
+#  save(Thrds, file=save_file_name)
+#  
+#  print(paste('Saved ', nrow(Thrds), " records in ",save_file_name))
+#  
+#  return(Thrds) 
+#   
+# }
+# 
