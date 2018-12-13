@@ -44,8 +44,8 @@ plots_for_papers <- function(){
     ggplot(data = cdt, aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
     geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank(), axis.text.y=element_blank())
     
-    ggplot(data = cdt, aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
-      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    ggplot(data = cdt_435[,1:6], aes(x = ymd, y = rollmean( Dist_from_reference, 10,na.pad=TRUE), group=Clinic)) + 
+      geom_line(aes(color=Clinic)) + theme(axis.text.x=element_blank())
     
   
   
@@ -139,6 +139,37 @@ chisq.test(C_R)
    summarize(AVG_staff=mean(total_staff))  %>%
    spread( Role, AVG_staff)
  
+ # let's look at the actions by clinic_role, using the visit_role threads
+actions_by_role =  VRThrds %>%
+   group_by(Clinic,Role_VR) %>%
+   summarize(avgActions = mean(Action_countVR))    %>%
+   spread( Role_VR, avgActions)
+
+# Look at alignment by clinic
+visits %>%
+  group_by(Clinic,Phase)  %>%
+  summarize(w=max(ThreadDuration,na.rm = TRUE)  )   %>%
+  spread( Phase, w)
+ 
+
+# Get LOS by clinic-day
+visits %>%
+  group_by(Clinic_ymd)  %>%
+  summarize(los=mean(LOS,na.rm = TRUE)  )
+
+
+# See if diagnoses differ by  time period
+Diag_by_phase = visits %>%
+  group_by(Phase,Diagnosis_Group)  %>%
+  summarize(n=n() )  %>%
+  spread( Diagnosis_Group, n)
+
+# See if actions differ by time period
+#  cds_435_1 is a dataframe with one for for each clinic_day and ~300 columns for the actions
+Action_by_phase = cds_435_1 %>%
+  group_by(Phase)  %>%
+  summarize_at(8:307,median ) 
+
 }
 
 

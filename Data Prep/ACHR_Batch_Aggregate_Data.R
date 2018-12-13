@@ -79,6 +79,7 @@ ACHR_batch_threads <- function(occ, EVENT_CFs, ALL_CFs) {
                     VisitDuration= double(N),
                     wait_time1 = double(N),
                     wait_time2 = double(N),
+                    LOS =double(N),
                     NetComplexity=double(N),
                     Nodes=double(N),
                     Edges=double(N),
@@ -135,7 +136,10 @@ ACHR_batch_threads <- function(occ, EVENT_CFs, ALL_CFs) {
   } 
   
   # Compute the alignment of the context factors
-  ACHR$CF_Alignment =  as.numeric( as.character(ACHR$Action_count)) / as.numeric( as.character(ACHR$ALL_CF_count ))
+  ACHR$CF_Alignment :=  as.numeric( as.character(ACHR$Action_count)) / as.numeric( as.character(ACHR$ALL_CF_count ))
+  
+  # convert level of service to 1-5 integer
+  ACHR$LOS := convert_LOS( occ$LOS_CPT )
   
   # Merge the results with the first row from each thread
   print('Merging results...')
@@ -200,6 +204,7 @@ ACHR_batch_visit_role_threads <- function(occ, EVENT_CFs, ALL_CFs, visits) {
                     NEventsVR = integer(N),
                     threadStartVR =  character(N), 
                     ThreadDurationVR =double(N),
+                    LOS =double(N),
                     NetComplexityVR=double(N),
                     NodesVR=double(N),
                     EdgesVR=double(N),
@@ -249,6 +254,9 @@ ACHR_batch_visit_role_threads <- function(occ, EVENT_CFs, ALL_CFs, visits) {
   
   # Compute the alignment of the context factors
  #  ACHR$CF_AlignmentVR =  as.numeric( as.character(ACHR$Action_countVR)) / as.numeric( as.character(ACHR$ALL_CF_countVR ))
+  
+  # convert level of service to 1-5 integer
+  ACHR$LOS := convert_LOS( occ$LOS_CPT )
   
   # Merge the results with the first row from each thread
   print('Merging results...')
@@ -536,10 +544,22 @@ count_daily_procedures <- function( df ) {
   
 }
 
-# get_timeScale <- function(){'hr'}
+# convert the LOS_CPT codes into a five point numeric scale
+# operate on whole column to create new column
+convert_LOS <- function(los_cpt){
+  
+  # get the 5th character
+  s = sapply(los_cpt, function(cpt)  { substring(as.character(cpt),5,5) } )
+  
+  los = as.numeric(s)
+  
+  # convert 9 and NA to 1
+  los[los==9]=1
+  los[is.na(los)]=1
 
-
-
+return(los)  
+  
+}
 
 ###################################################################
 ###################################################################

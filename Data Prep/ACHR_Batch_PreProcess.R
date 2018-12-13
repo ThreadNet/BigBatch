@@ -32,6 +32,9 @@ redo_ACHR_data_from_scratch  <- function(fname){
   #  first read the data
   o = read_ACHR_data( fname )
   
+  # fix the role IDs -- needs file called RoleChangeTable.csv in the local directory
+  o = fix_derm_role_ID(o)
+  
   # Thread occurrences  adds threadNum and seqNum to each thread, as defined by the the thread_CF.
   # Threads are always WITHIN VISITS in this code -- so they can be whole visits or chunks of visits (e.g., visit_ID_Role)
   occ = thread_occurrences( o,  THREAD_CF ,fname )
@@ -123,6 +126,34 @@ cleanOccBatch <- function(fileRows){
   return(complete)
 }
   
+#######################################################################################
+# In the derm data, the role "technician" was used for people who were not technicians
+# Pass in the table of occurrences, fix it, and return it
+# read in the list of changes
+fix_derm_role_ID <- function(o){
+  
+  # read in the new role ID
+  rc = read.csv('RoleChangeTable.csv')
+  
+  
+  #  occurrences are a data.table so use :=
+  for (r in 1:nrow(rc)) {
+    
+    old_rid = rc$OLD_Role_ID[r]
+    new_rid = rc$NEW_Role_ID[r]
+    new_role = rc$NEW_Role[r]
+    
+    o[o$Role_ID==old_rid, Role_ID := new_rid]
+    o[o$Role_ID==old_rid, Role := new_role]
+    
+  }
+  
+  return(o)
+}
+
+
+
+
 #########################################################################################
 # This function adds columns  for  the the thread, as requested ( Tested Nov 16 )
 # Then it sorts by thread and tStamp and  adds thread/sequence numbers to  each thread.
