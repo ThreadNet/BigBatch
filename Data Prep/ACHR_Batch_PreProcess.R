@@ -22,6 +22,8 @@ library(lubridate)
 
 redo_ACHR_data_from_scratch  <- function(fname){
 
+  setwd("~/Documents/@NSF Healthcare Routines/Deidentified_Derm_data_Nov_2018")
+  
   fname = 'audit_111818'
   
   # Pick you point of view, or multiple POV...
@@ -37,7 +39,10 @@ redo_ACHR_data_from_scratch  <- function(fname){
   
   # Thread occurrences  adds threadNum and seqNum to each thread, as defined by the the thread_CF.
   # Threads are always WITHIN VISITS in this code -- so they can be whole visits or chunks of visits (e.g., visit_ID_Role)
-  occ = thread_occurrences( o,  THREAD_CF ,fname )
+  # make two versions -- one for whole visits and one for visit_ID_Role
+  ot = thread_occurrences( o, 'Visit_ID' ,fname )
+  otr = thread_occurrences( o, c('Visit_ID','Role') ,fname )
+  
   
   #  Now aggregate by clinic-day for  each POV
   clinic_days = ACHR_batch_clinic_days(occ, THREAD_CF, EVENT_CF, fname)
@@ -133,7 +138,7 @@ cleanOccBatch <- function(fileRows){
 fix_derm_role_ID <- function(o){
   
   # read in the new role ID
-  rc = read.csv('RoleChangeTable.csv')
+  rc = read.csv('RoleChangeTable.csv', stringsAsFactors = FALSE)
   
   
   #  occurrences are a data.table so use :=
@@ -143,8 +148,14 @@ fix_derm_role_ID <- function(o){
     new_rid = rc$NEW_Role_ID[r]
     new_role = rc$NEW_Role[r]
     
-    o[o$Role_ID==old_rid, Role_ID := new_rid]
-    o[o$Role_ID==old_rid, Role := new_role]
+    # pick out rows with old Role_ID
+    # old_rid_vector = o$Role_ID==old_rid
+    # 
+    # o[old_rid_vector, Role_ID := new_rid]
+    # o[old_rid_vector, Role := new_role]
+    
+    # crazy data table  syntax... do it all in one shot
+    o[o$Role_ID==old_rid, ':=' (Role = new_role, Role_ID = new_rid ) ]
     
   }
   
