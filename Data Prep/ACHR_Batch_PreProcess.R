@@ -32,7 +32,7 @@ redo_ACHR_data_from_scratch  <- function(fname){
   ALL_CF = c('Action','Role','Workstation')
   
   #  first read the data
-  o = read_ACHR_data( fname )
+  o = read_ACHR_data( fname )  # nrow(o) = 7728927
   
   # fix the role IDs -- needs file called RoleChangeTable.csv in the local directory
   o = fix_derm_role_ID(o)
@@ -40,8 +40,8 @@ redo_ACHR_data_from_scratch  <- function(fname){
   # Thread occurrences  adds threadNum and seqNum to each thread, as defined by the the thread_CF.
   # Threads are always WITHIN VISITS in this code -- so they can be whole visits or chunks of visits (e.g., visit_ID_Role)
   # make two versions -- one for whole visits and one for visit_ID_Role
-  ot = thread_occurrences( o, 'Visit_ID' ,fname )
-  otr = thread_occurrences( o, c('Visit_ID','Role') ,fname )
+  ot = thread_occurrences( o, 'Visit_ID' ,fname )   # nrow(ot)= 57835
+  otr = thread_occurrences( o, c('Visit_ID','Role') ,fname ) # nrow(otr) = 527666
   
   
   #  Now aggregate by clinic-day for  each POV

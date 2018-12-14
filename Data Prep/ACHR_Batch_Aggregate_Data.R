@@ -136,10 +136,10 @@ ACHR_batch_threads <- function(occ, EVENT_CFs, ALL_CFs) {
   } 
   
   # Compute the alignment of the context factors
-  ACHR$CF_Alignment :=  as.numeric( as.character(ACHR$Action_count)) / as.numeric( as.character(ACHR$ALL_CF_count ))
+  ACHR$CF_Alignment =  as.numeric( as.character(ACHR$Action_count)) / as.numeric( as.character(ACHR$ALL_CF_count ))
   
-  # convert level of service to 1-5 integer
-  ACHR$LOS := convert_LOS( occ$LOS_CPT )
+  # convert level of service to 1-5 integer 
+  ACHR$LOS = convert_LOS( firstOcc$LOS_CPT )
   
   # Merge the results with the first row from each thread
   print('Merging results...')
@@ -252,11 +252,6 @@ ACHR_batch_visit_role_threads <- function(occ, EVENT_CFs, ALL_CFs, visits) {
     for (cf in ALL_CFs){  ACHR[b, paste0(cf,"_countVR") :=  length(unique(df[[cf]])) ] }
   } 
   
-  # Compute the alignment of the context factors
- #  ACHR$CF_AlignmentVR =  as.numeric( as.character(ACHR$Action_countVR)) / as.numeric( as.character(ACHR$ALL_CF_countVR ))
-  
-  # convert level of service to 1-5 integer
-  ACHR$LOS := convert_LOS( occ$LOS_CPT )
   
   # Merge the results with the first row from each thread
   print('Merging results...')
@@ -554,8 +549,8 @@ convert_LOS <- function(los_cpt){
   los = as.numeric(s)
   
   # convert 9 and NA to 1
-  los[los==9]=1
-  los[is.na(los)]=1
+  los[los==9]=NA
+
 
 return(los)  
   
