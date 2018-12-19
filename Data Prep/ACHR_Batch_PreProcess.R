@@ -48,10 +48,15 @@ redo_ACHR_data_from_scratch  <- function(fname){
   clinic_days = ACHR_batch_clinic_days(occ, THREAD_CF, EVENT_CF, fname)
   
   # Aggregate by visit for each POV
-  visits = ACHR_batch_visits(occ, THREAD_CF, EVENT_CF, fname)
+  # Whole visits
+  visits = ACHR_batch_visits(ot, THREAD_CF, EVENT_CF, fname)
+  
+  # And then by role
+  VRThreads <- ACHR_batch_visit_role_threads(otr, c('Action'), c('Action','Role','Workstation') , visits)
+
     
   # compute  trajectories to see difference from a reference graph
-  traj = graph_trajectory( occ, 'Clinic_ymd', EVENT_CF, 2, 1, 0, 'Clinic_trajectory')
+  traj = graph_trajectory( ot, 'Clinic_ymd', EVENT_CF, 2, 1, 0, 'Clinic_trajectory')
   
 }
 

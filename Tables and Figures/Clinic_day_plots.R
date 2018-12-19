@@ -77,13 +77,15 @@ plots_for_papers <- function(){
  Clinic_role_pct = otr %>%
     group_by(Clinic, Role)  %>%
     summarize(n=n()) %>%
-    mutate(RolePct = n/sum(n))
+    mutate(RolePct = n/sum(n))  %>%
+   select(Clinic, Role, RolePct) %>%
+   spread(Role, RolePct)
     
  # get LOS by clinic based on visits
  Clinic_LOS_pct = visits %>%
    group_by(Clinic, LOS_CPT)  %>%
    summarize(n=n()) %>%
-   mutate(LOSPct = n/sum(n)) %<%
+   mutate(LOSPct = n/sum(n)) %>%
    spread(Clinic, Role)
  
  # Make contingency table Clinic x  LOS
@@ -118,7 +120,7 @@ chisq.test(C_R)
  
  
  # Get the handoffs per visit.  Use the distinct chunks in the Visit-Role threads (VRThrds)
- Role_Handoffs = VRThrds %>%
+ Role_Handoffs = VRThreads %>%
    group_by(Clinic,Visit_ID) %>%
    summarize(ho = n_distinct(threadNumVR))
 
@@ -136,11 +138,16 @@ chisq.test(C_R)
  
  Clinic_AVG_daily_staffing = Clinic_daily_staffing %>%
    group_by(Clinic,Role)  %>%
-   summarize(AVG_staff=mean(total_staff))  %>%
+   summarize(AVG_staff=mean(total_staff, na.rm = TRUE))  %>%
+   spread( Role, AVG_staff)
+ 
+ Clinic_AVG_daily_staffing = Clinic_daily_staffing %>%
+   group_by(Clinic,Role)  %>%
+   summarize(AVG_staff=median(total_staff, na.rm = TRUE))  %>%
    spread( Role, AVG_staff)
  
  # let's look at the actions by clinic_role, using the visit_role threads
-actions_by_role =  VRThrds %>%
+actions_by_role =  VRThreads %>%
    group_by(Clinic,Role_VR) %>%
    summarize(avgActions = mean(Action_countVR))    %>%
    spread( Role_VR, avgActions)
@@ -153,7 +160,7 @@ visits %>%
  
 
 # Get LOS by clinic-day
-visits %>%
+LOS_by_clinic_day = visits %>%
   group_by(Clinic_ymd)  %>%
   summarize(los=mean(LOS,na.rm = TRUE)  )
 
@@ -182,6 +189,34 @@ remove_outliers <- function(x, na.rm = TRUE, ...) {
   y
 }
 
+# converts visit_ID into character string with  factor  levels for actions
+make_visit_string <- function(occ, vid){
+  
+  return(paste(as.character(as.numeric(occ$Action[occ$Visit_ID==as.character(vid)])),collapse = '-'))
+}
+
+# Converts list of actions into regex of factor levels  
+make_process_pattern <- function(lvls,  p){
+  
+  return( paste( sapply(p, function(x) {as.character(which(lvls==x))}) , collapse = '.*') )
+}
+
+# Find process patterns
+find_process_pattern <- function(occ,  p, vid){
+  
+  x = make_process_pattern( levels(ot$Action),  p)
+  print(x)
+  
+   m = sapply(vid, function(v) {
+                              (grepl( x, make_visit_string(occ, v))) } )
+  # 
+  
+
+#  m = grep( x, make_visit_string(occ, vid))
+  
+  return(m)
+  
+}
 
 # 
 # make_box_plots <- function(){
