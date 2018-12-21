@@ -178,7 +178,9 @@ graph_trajectory  <- function(e, bucket_CFs, cf, n_gram_size=2, reference_day=1,
   return(df)
 
 }
+##################################################################################
 
+##################################################################################
 graph_trajectory_week  <- function(e, bucket_CFs, cf, n_gram_size=2, reference_day=1, filter_threshold=0,keep_ngram_vectors=FALSE, save_file_name='deleteme') {
   
   # add column for bucket_CF if needed

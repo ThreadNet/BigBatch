@@ -44,11 +44,38 @@ plots_for_papers <- function(){
     ggplot(data = cdt, aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
     geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank(), axis.text.y=element_blank())
     
-    ggplot(data = cdt_435[,1:6], aes(x = ymd, y = rollmean( Dist_from_reference, 10,na.pad=TRUE), group=Clinic)) + 
-      geom_line(aes(color=Clinic)) + theme(axis.text.x=element_blank())
+    ggplot(data = cds_435_1 %>% filter(Phase=='one'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
     
+    ggplot(data = cds_435_1 %>% filter(Phase=='two'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    
+    ggplot(data = cds_435_1 %>% filter(Phase=='three'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    
+    ggplot(data = cds_435_1 %>% filter(Phase=='four'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    
+    ggplot(data = cds_435_1 %>% filter(Phase=='five'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
   
-  
+  # Here are the pairs
+    ggplot(data = cds_435 %>% filter(Phase=='one'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    
+    ggplot(data = cds_435 %>% filter(Phase=='two'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    
+    ggplot(data = cds_435 %>% filter(Phase=='three'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    
+    ggplot(data = cds_435 %>% filter(Phase=='four'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    
+    ggplot(data = cds_435 %>% filter(Phase=='five'), aes(x = ymd.x, y = rollmean( Dist_from_reference, 5,na.pad=TRUE), group=Clinic.x)) + 
+      geom_line(aes(color=Clinic.x)) + theme(axis.text.x=element_blank())
+    
+    
   # ROle change over time
   ggplot(data = cds, aes(x = ymd, y = Dist_from_reference, group=Role)) + geom_line(aes(color=Role))
   
