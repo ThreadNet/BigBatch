@@ -248,6 +248,20 @@ find_process_pattern <- function(occ,  p, vid){
   
 }
 
+dualWindowCosine <- function(df, clinic_col, colrange, windowsize){
+  
+  
+  rdf = data.frame(clinic = df[windowsize:(nrow(df)-windowsize),..clinic_col],
+                   ymd =  df[windowsize:(nrow(df)-windowsize),ymd],
+                   corr = sapply(windowsize:(nrow(df)-windowsize), 
+                                 function(x) { 
+                                   distance(rbind( colSums(df[(x-windowsize+1):x,..colrange]),colSums(df[(x+1):(x+windowsize), ..colrange ]) ), 
+                                            method='cosine' ) })
+  )
+  return(rdf)
+}
+
+
 # 
 # make_box_plots <- function(){
 # ggboxplot(ACHR_test[NEvents>100 & Clinic=='DRH'], x = "VisitMonth", y = "NetComplexity",

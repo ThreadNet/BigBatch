@@ -122,7 +122,7 @@ graph_trajectory  <- function(e, bucket_CFs, cf, n_gram_size=2, reference_day=1,
   
   for (i in 1:nWindows){
     
-    # get the merged list
+    # get the merged listunqi
     vtmerge = merge(x=vt_unique, y=vt[vt$bid==i,], by='ngrams', all.x = TRUE)
     
     # use the bid.y to get the whole vector, but replace the NA with zeros
