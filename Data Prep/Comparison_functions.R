@@ -31,3 +31,20 @@ get_range <- function(o, start_date, end_date){
   o %>% filter(as.Date(tStamp) > start_date & as.Date(tStamp) < end_date)
   
 }
+
+
+#  get start dates -- just a place to stick some code
+# April 2019
+
+get_start_dates <- function(){
+
+  # first get the roles that are relativeluy frequent
+  role_freq2 = as.data.frame(table(ot$Role_ID)[table(ot$Role_ID)>1000])
+  
+  # then get their start dates
+role_freq2$start_date = sapply(role_freq2$Var1, function(x) {min(as.character(ot$tStamp[ot$Role_ID==as.character(x)]))})
+
+  # then trim it so it's more readable. 
+role_freq2$start_date = substr(role_freq2$start_date,1,10)
+
+}

@@ -281,9 +281,13 @@ ACHR_batch_clinic_days <- function(occ,TN, CFs) {
       ACHR[b,ARW_Nodes := nrow(n$nodeDF) ]
       ACHR[b,ARW_Edges := nrow(n$edgeDF) ]  
       
+      # # get the entropy for AR and ARW
+      # ACHR[b, AR_Entropy  := compute_entropy(table(df[[DV2]])[table(df[[DV2]])>0]) ]
+      # ACHR[b, ARW_Entropy  := compute_entropy(table(df[[DV3]])[table(df[[DV3]])>0]) ]
+      
       # get the entropy for AR and ARW
-      ACHR[b, AR_Entropy  := compute_entropy(table(df[[DV2]])[table(df[[DV2]])>0]) ]
-      ACHR[b, ARW_Entropy  := compute_entropy(table(df[[DV3]])[table(df[[DV3]])>0]) ]
+      ACHR[b, AR_Entropy  := compute_graph_entropy_TEST(df[[DV2]]) ]
+      ACHR[b, ARW_Entropy  := compute_graph_entropy_TEST(df[[DV3]]) ]
       
       
       # compute stuff on each context factor
@@ -296,7 +300,10 @@ ACHR_batch_clinic_days <- function(occ,TN, CFs) {
         ACHR[b, paste0(cf,"_compression") := compression_index(df,cf) ]
         
         # get the entropy
-        ACHR[b, paste0(cf,"_entropy") := compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) ]
+        # ACHR[b, paste0(cf,"_entropy") := compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) ]
+        
+        # get the graph entropy
+        ACHR[b, paste0(cf,"_entropy") := compute_graph_entropy_TEST(df[[cf]]) ]
         
       }
     } # kf nrows > 2
@@ -442,9 +449,12 @@ for (i in 1:N){
       ACHR[b,ARW_Nodes := nrow(n$nodeDF) ]
       ACHR[b,ARW_Edges := nrow(n$edgeDF) ]  
       
-      # get the entropy for AR and ARW
-      ACHR[b, AR_Entropy  := compute_entropy(table(df[[DV2]])[table(df[[DV2]])>0]) ]
-      ACHR[b, ARW_Entropy  := compute_entropy(table(df[[DV3]])[table(df[[DV3]])>0]) ]
+      # # get the entropy for AR and ARW
+      # ACHR[b, AR_Entropy  := compute_entropy(table(df[[DV2]])[table(df[[DV2]])>0]) ]
+      # ACHR[b, ARW_Entropy  := compute_entropy(table(df[[DV3]])[table(df[[DV3]])>0]) ]
+      
+      ACHR[b, AR_Entropy  := compute_graph_entropy_TEST( df[[DV2]] )  ]
+      ACHR[b, ARW_Entropy  := compute_graph_entropy_TEST( df[[DV3]] ) ]
       
     
   # compute stuff on each context factor
@@ -457,8 +467,9 @@ for (i in 1:N){
     ACHR[b, paste0(cf,"_compression") := compression_index(df,cf) ]
 
     # get the entropy
-    ACHR[b, paste0(cf,"_entropy") := compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) ]
-
+    # ACHR[b, paste0(cf,"_entropy") := compute_entropy(table(df[[cf]])[table(df[[cf]])>0]) ]
+    ACHR[b, paste0(cf,"_entropy") := compute_graph_entropy_TEST( df[[cf]])  ]
+    
   }
 } # kf nrows > 2
 
@@ -539,3 +550,21 @@ cleanOccBatch <- function(fileRows){
 
 get_timeScale <- function(){'hr'}
 
+# create a function to compute graph entropy
+# It will use the standard Shannon entropy, but it will apply it to the frequencies of edges in the 
+# adjacency matrix.  To do this, we just need to count the 2-grams in the sequence and divide by the total 
+# number of 2-grams to get the probabilities.  You should be able to pass in any sequence. 
+# NOTE: This version will work on one sequence at a time (eg. one patient visit)
+# Needs to be revised to work on groups of visits (e.g,. clinic-days) 
+compute_graph_entropy_TEST <- function(s){
+  
+  # first convert s into text vector
+  text_vector =  concatenate(s) 
+  
+  # get the 2-grams in the sequence s. ng$prop is the proportion of each edge. It sums to 1. 
+  p = get.phrasetable(ngram(text_vector,2))[['prop']]
+ 
+  # return Shannon entropy
+  return(-sum(p*log(p)))
+   
+}
