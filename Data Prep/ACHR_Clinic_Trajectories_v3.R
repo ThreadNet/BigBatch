@@ -317,6 +317,102 @@ graph_trajectory_ROLES  <- function(e, bucket_CFs, cf, n_gram_size=2, reference_
 
 }
 ##################################################################################
+# e = otr, needs to be set up to include threads that are visit_ID_Role 
+# there must be a 'threadNum" assigned in each row
+#
+# cf is the context factor we want to follow, such as 'Action'
+
+
+get_ngrams_for_buckets  <- function(e,  cf, n_gram_size=2, filter_threshold=2,  save_file_name='deleteme') {
+  
+  
+  
+  # here is the sorted list of buckets
+  blist = sort(unique(e$threadNum))
+  
+  
+  # now many buckets?
+  nb = length(blist)
+  # print(blist)
+  print(paste('Number of buckets =',nb))
+  
+  # make data frame for results
+  vt=data.frame( ngrams=character(), freq=integer(), bid=integer(),bname=character() )
+  
+  bcount=0
+  # scan through the data
+  for (b in blist){
+    bcount= bcount +1
+    # print(paste('b =',b))
+    
+ 
+    # n_gram_size = 1 for 1-grams, n_gram_size = 2 for pairs.
+    th = e[ e[['threadNum']] ==b , ] 
+    
+    if (nrow(th)>filter_threshold) { ngdf = count_ngrams(th, 'threadNum', cf, n_gram_size)[1:2]    
+    
+    # add the bucket number and name
+    ngdf$bid = bcount
+    ngdf$bname = b
+    
+    # append the columns to the end
+    # vt is the whole set of all ngrams in all the windows
+    vt=rbind(vt,ngdf)
+    }
+  }
+  
+  
+  # convert to factor
+  vt$ngrams = factor(vt$ngrams)
+  
+  # nWindows = length(unique(vt$bid))
+  nWindows = nb
+  #print(paste('nWindows =',nWindows))
+  
+  # get the set of unique ngrams for the whole data set
+  vt_unique = data.frame(ngrams=unique(vt$ngrams))
+  #print(vt_unique)
+  
+  # put the results here
+  windowFreqMatrix = matrix(0,nrow=nWindows, ncol=nrow(vt_unique))
+  
+  for (i in 1:nWindows){
+    
+    # get the merged listunqi
+    vtmerge = merge(x=vt_unique, y=vt[vt$bid==i,], by='ngrams', all.x = TRUE)
+    
+    # use the bid.y to get the whole vector, but replace the NA with zeros
+    bb=vtmerge[vtmerge$bid==i,'freq']
+    bb[is.na(bb)] <- 0
+    
+    windowFreqMatrix[i,]=bb
+    
+    print( paste(i, 'num non-zero=', sum(windowFreqMatrix[i,] > 0)))
+    
+  }
+  
+
+  
+  # get the ngram data and labels
+    # convert matrix to data frame
+ #   df=as.data.frame(windowFreqMatrix[1:(nWindows-1),])
+    df=as.data.frame(windowFreqMatrix)
+    
+    # add the columnnames
+    colnames(df)=vt_unique$ngrams
+    
+    # add the bucket names
+     df = cbind(as.data.frame(blist), df)
+     colnames(df)[1] <- c("threadNum")
+  
+     
+  
+  # save the result and return it, too
+  #save(df, file=paste0(save_file_name,'.rData') )
+  
+  return(df)
+  
+}
 
 ##################################################################################
 graph_trajectory_week  <- function(e, bucket_CFs, cf, n_gram_size=2, reference_day=1, filter_threshold=0,keep_ngram_vectors=FALSE, save_file_name='deleteme') {

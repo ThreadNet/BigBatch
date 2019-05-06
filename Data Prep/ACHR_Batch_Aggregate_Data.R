@@ -697,3 +697,17 @@ compute_graph_entropy <- function(s){
   
 }
 
+get_action_frequencies <- function(s,n){
+  
+  # guard against insufficient data...
+  if (length(s) < n) return(0)
+  
+  # convert s into text vector
+  text_vector =  concatenate(s) 
+  
+  # get the 2-grams in the sequence s. 'freq' is the frequency
+ return( get.phrasetable(ngram(text_vector, n )) )
+  
+}
+
+
