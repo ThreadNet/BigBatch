@@ -28,7 +28,8 @@ redo_ACHR_data_from_scratch  <- function(fname){
   
   # Pick you point of view, or multiple POV...
   THREAD_CF = c('Visit_ID')
-  EVENT_CF = c('Action','Role','Workstation')
+ # EVENT_CF = c('Action','Role','Workstation')
+  EVENT_CF = c('Action')
   ALL_CF = c('Action','Role','Workstation')
   
   #  first read the data
@@ -41,7 +42,8 @@ redo_ACHR_data_from_scratch  <- function(fname){
   # Threads are always WITHIN VISITS in this code -- so they can be whole visits or chunks of visits (e.g., visit_ID_Role)
   # make two versions -- one for whole visits and one for visit_ID_Role
   ot = thread_occurrences( o, 'Visit_ID' ,fname )   # nrow(ot)= 57835
-  otr = thread_occurrences( o, c('Visit_ID','Role') ,fname ) # nrow(otr) = 527666
+ # otr = thread_occurrences( o, c('Visit_ID','Role') ,fname ) # nrow(otr) = 527666
+  otrw = thread_occurrences( o, c('Visit_ID','Role','Workstation') ,fname ) # nrow(otrw) > 527666
   
   
   #  Now aggregate by clinic-day for  each POV

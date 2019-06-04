@@ -92,7 +92,12 @@ ACHR_batch_threads <- function(occ, EVENT_CFs, ALL_CFs) {
                     ALL_CF_count =  integer(N),
                     ALL_CF_entropy = double(N),
                     CF_Alignment = double(N) )
-
+  
+  #################################################
+  # add columns for time of each role (or something)
+ 
+  
+  
     # Now add columns for the CF counts.  
     for (cf in ALL_CFs){
       ACHR[, paste0(cf,"_count"):= double(N)]
@@ -135,6 +140,12 @@ ACHR_batch_threads <- function(occ, EVENT_CFs, ALL_CFs) {
     # ACHR[b,ALL_CF_entropy := compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]) ]
     ACHR[b,ALL_CF_entropy := compute_graph_entropy( df[[all_cf_col]])  ] 
     
+    #################################################
+    # Compute time of each role 
+    # need to difftime start-end of each thread -- compute_thread_duration
+    # sum up the role chunks for each role within each thread
+    
+    
     # Count the unique elements in each cf  
     for (cf in ALL_CFs){  ACHR[b, paste0(cf,"_count") :=  length(unique(df[[cf]])) ] }
   } 
@@ -160,6 +171,7 @@ ACHR_batch_threads <- function(occ, EVENT_CFs, ALL_CFs) {
 #################################################################################
 # streamlined version for threads that are PART OF A VISIT.  So you can merge with visits
 # to get the visit context.  Just compute the minimum for speed.
+# Needs to pass in the visit data to merge
 ACHR_batch_visit_role_threads <- function(occ, EVENT_CFs, ALL_CFs, visits) {
   
   library(tidyr)
@@ -216,6 +228,9 @@ ACHR_batch_visit_role_threads <- function(occ, EVENT_CFs, ALL_CFs, visits) {
                     EntropyVR = double(N),
                     ALL_CF_countVR =  integer(N),
                     ALL_CF_entropyVR = double(N) )
+
+    #################################################
+  # add columns for time of each role (or something)
   
   # Now add columns for the CF counts.  
   for (cf in ALL_CFs){
@@ -254,6 +269,12 @@ ACHR_batch_visit_role_threads <- function(occ, EVENT_CFs, ALL_CFs, visits) {
     ACHR[b,ALL_CF_countVR := length(unique(df[[all_cf_col]])) ]
     # ACHR[b,ALL_CF_entropyVR := compute_entropy(table(df[[all_cf_col]])[table(df[[all_cf_col]])>0]) ] 
     ACHR[b,ALL_CF_entropyVR := compute_graph_entropy( df[[all_cf_col]])  ] 
+    
+    #################################################
+    # Compute time of each role 
+    # need to difftime start-end of each thread -- compute_thread_duration
+    # sum up the role chunks for each role within each thread
+    
     
     # Count the unique elements in each cf  
     for (cf in ALL_CFs){  ACHR[b, paste0(cf,"_countVR") :=  length(unique(df[[cf]])) ] }
@@ -370,6 +391,7 @@ ACHR_batch_visit_add_columns <- function(occ, EVENT_CFs, visits) {
 }
 ##################################################################################
 # Helper functions
+#################################################################################
 compute_phase <- function(t){
   
   t=as.Date(t)
