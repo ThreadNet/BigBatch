@@ -535,7 +535,7 @@ count_procedures <- function( p ){
   if (is.na( p )) return( 0 )
   
   # get the overall number of items
-  total_num = str_count( p, '#@#')
+  total_num = str_count( p, '#@#')+1
   
   # adjust for the visit codes that are not actual procedures
   v=c('99211','99212','99213','99214','99215','99201','99202','99203','99204','99205')

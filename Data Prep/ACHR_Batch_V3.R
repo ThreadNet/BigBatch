@@ -271,15 +271,15 @@ ACHR_batch_clinic_days <- function(occ,TN, CFs) {
       ACHR[b,A_Nodes := nrow(n$nodeDF) ]
       ACHR[b,A_Edges := nrow(n$edgeDF) ]
       
-      n = threads_to_network_original(df,TN, DV2)
-      ACHR[b,AR_NetComplexity := estimate_network_complexity( n )]
-      ACHR[b,AR_Nodes := nrow(n$nodeDF) ]
-      ACHR[b,AR_Edges := nrow(n$edgeDF) ]     
-      
-      n = threads_to_network_original(df,TN, DV3)
-      ACHR[b,ARW_NetComplexity := estimate_network_complexity( n )]
-      ACHR[b,ARW_Nodes := nrow(n$nodeDF) ]
-      ACHR[b,ARW_Edges := nrow(n$edgeDF) ]  
+      # n = threads_to_network_original(df,TN, DV2)
+      # ACHR[b,AR_NetComplexity := estimate_network_complexity( n )]
+      # ACHR[b,AR_Nodes := nrow(n$nodeDF) ]
+      # ACHR[b,AR_Edges := nrow(n$edgeDF) ]     
+      # 
+      # n = threads_to_network_original(df,TN, DV3)
+      # ACHR[b,ARW_NetComplexity := estimate_network_complexity( n )]
+      # ACHR[b,ARW_Nodes := nrow(n$nodeDF) ]
+      # ACHR[b,ARW_Edges := nrow(n$edgeDF) ]  
       
       # # get the entropy for AR and ARW
       # ACHR[b, AR_Entropy  := compute_entropy(table(df[[DV2]])[table(df[[DV2]])>0]) ]
@@ -334,8 +334,10 @@ ACHR_batch_clinic_days <- function(occ,TN, CFs) {
   return(ACHR)
 }
 
-###################################################################
-###################################################################
+##################################################################
+##################################################################
+##################################################################
+##################################################################
 
 
 
@@ -380,6 +382,7 @@ ACHR = data.table(bucket=integer(N),
                   A_Entropy = double(N),
                   AR_Entropy = double(N),
                   ARW_Entropy = double(N),
+                  CF_Alignment = double(N), 
                   Visit_ID  = character(N), 
                   Subject_ID  = character(N), 
                   Clinic = character(N),
@@ -427,8 +430,8 @@ for (i in 1:N){
      
     # compressibility of DV
       ACHR[b,A_CompressRatio := compression_index(df,DV1)]
-      ACHR[b,AR_CompressRatio := compression_index(df,DV2)]
-      ACHR[b,ARW_CompressRatio := compression_index(df,DV3)]  
+      # ACHR[b,AR_CompressRatio := compression_index(df,DV2)]
+      # ACHR[b,ARW_CompressRatio := compression_index(df,DV3)]  
       
     # NetComplexity of DV
     # First get the network
@@ -439,23 +442,23 @@ for (i in 1:N){
       ACHR[b,A_Nodes := nrow(n$nodeDF) ]
       ACHR[b,A_Edges := nrow(n$edgeDF) ]
       
-      n = threads_to_network_original(df,TN, DV2)
-      ACHR[b,AR_NetComplexity := estimate_network_complexity( n )]
-      ACHR[b,AR_Nodes := nrow(n$nodeDF) ]
-      ACHR[b,AR_Edges := nrow(n$edgeDF) ]     
-      
-      n = threads_to_network_original(df,TN, DV3)
-      ACHR[b,ARW_NetComplexity := estimate_network_complexity( n )]
-      ACHR[b,ARW_Nodes := nrow(n$nodeDF) ]
-      ACHR[b,ARW_Edges := nrow(n$edgeDF) ]  
+      # n = threads_to_network_original(df,TN, DV2)
+      # ACHR[b,AR_NetComplexity := estimate_network_complexity( n )]
+      # ACHR[b,AR_Nodes := nrow(n$nodeDF) ]
+      # ACHR[b,AR_Edges := nrow(n$edgeDF) ]     
+      # 
+       n = threads_to_network_original(df,TN, DV3)
+       ACHR[b,ARW_NetComplexity := estimate_network_complexity( n )]
+       ACHR[b,ARW_Nodes := nrow(n$nodeDF) ]
+       ACHR[b,ARW_Edges := nrow(n$edgeDF) ]  
       
       # # get the entropy for AR and ARW
       # ACHR[b, AR_Entropy  := compute_entropy(table(df[[DV2]])[table(df[[DV2]])>0]) ]
       # ACHR[b, ARW_Entropy  := compute_entropy(table(df[[DV3]])[table(df[[DV3]])>0]) ]
       
-      ACHR[b, AR_Entropy  := compute_graph_entropy_TEST( df[[DV2]] )  ]
-      ACHR[b, ARW_Entropy  := compute_graph_entropy_TEST( df[[DV3]] ) ]
-      
+      # ACHR[b, AR_Entropy  := compute_graph_entropy_TEST( df[[DV2]] )  ]
+       ACHR[b, ARW_Entropy  := compute_graph_entropy_TEST( df[[DV3]] ) ]
+      # 
     
   # compute stuff on each context factor
   for (cf in CFs){
@@ -491,6 +494,8 @@ for (i in 1:N){
     ACHR[b,'Weekday'  := df[1,'Weekday']]
     ACHR[b,'Month'  := df[1,'Month']]
     
+    # Compute the alignment of the context factors
+    ACHR[b, 'CF_Alignment' :=    ACHR[b,Action_count] / ACHR[b,ARW_Nodes] ]
     
     
 } # loop thru buckets
@@ -501,6 +506,168 @@ ACHR[,'A_Entropy' := ACHR[,'Action_entropy'] ]
 # return the table
 return(ACHR)
 }
+
+#####################   ############################################################
+#####################   ############################################################
+#####################   ############################################################
+
+
+# ACHR stands for Antecedents of Complexity in Healthcare Routines.  
+# This is function is set up to compute process parameters on thousands of patient visits.
+# This version assumes that CFs = c('Action','Role','Workstation')
+ACHR_batch_visits_all_CFs <- function(occ,TN, CFs) {
+  
+  # Get list of columns we want to use/create
+  dv1=newColName(CFs[1])
+  dv2=newColName(CFs[2])
+  dv3=newColName(CFs[3])
+  dv4=newColName(CFs[2:3])
+  dv5=newColName(CFs[1:2])
+  dv6=newColName(CFs[1:3])
+  
+  # need to make new columns
+  occ = combineContextFactors(occ,CFs[2:3], newColName(CFs[2:3]))
+  occ = combineContextFactors(occ,CFs[1:2], newColName(CFs[1:2]))
+  occ = combineContextFactors(occ,CFs[1:3], newColName(CFs[1:3]))
+  
+  # We  will  loop thru this list below
+  dv_list = c(dv1, dv2, dv3, dv4, dv5, dv6)
+  print(dv_list)
+ 
+  # set key on the data.table for the threadNum to speed retrival
+  occ=as.data.table(occ)
+  setkeyv(occ, TN)
+  
+  # pick subsets -- one visit at a time in this version, but could be more
+  bucket_list <- make_buckets_1(occ, 'threadNum')
+  
+  # get the size (number of buckets)
+  N = length(bucket_list)
+  # print(bucket_list)
+  
+  
+  # pre-allocate the data.table.  Tables are supposed to be faster.
+  ACHR = data.table(bucket=integer(N),
+                    NEvents = integer(N),
+                    VisitStart= character(N),
+                    VisitDuration=double(N),   
+                    CF_Alignment = double(N), 
+                    Visit_ID  = character(N), 
+                    Subject_ID  = character(N), 
+                    Clinic = character(N),
+                    LOS_CPT = character(N),
+                    NumProcedures = double(N),
+                    NumDiagnoses = double(N),
+                    Procedure = character(N),
+                    Diagnosis = character(N),   # diag in the raw data
+                    Diagnosis_group  = character(N), 
+                    Physician  = character(N), 
+                    Weekday  = character(N), 
+                    Month  = character(N)
+  )
+  
+  # Now add columns for each dv. 
+  for (dv in dv_list){
+    
+    ACHR[, paste0(dv,"_nodes"):= double(N)]
+    ACHR[, paste0(dv,"_edges"):= double(N)]
+    ACHR[, paste0(dv,"_complexity"):= double(N)]
+    ACHR[, paste0(dv,"_entropy"):= double(N)]
+    
+  }
+  
+  # loop through the buckets. Result will be data frame with one row per bucket
+  for (i in seq(1,N,1)){
+    
+    b = i #  as.integer(bucket_list[i])
+    
+    # bucket number
+    ACHR[b,bucket := b]
+    
+    # print once every 100 visits
+    # print(b)
+    # print (bucket_list[i])
+    
+    # save data every 1000 visits
+    if (b%%1000==0) {
+      print(b)
+      ACHR_partial = ACHR[ACHR$NEvents>1,]
+      save(ACHR_partial, file=paste0("visits_ARW_",nrow(ACHR_partial),'.Rdata'))}
+    
+    # select a subset 
+    df= subset(occ,  threadNum==bucket_list[i] )
+    
+    # only do the computations if there are more than two occurrences
+    if (nrow(df) > 2) {
+      
+    # make sure it is sorted by timestamp
+    df=df[order(df$tStamp),]
+  
+  
+    # length of the thread (number of rows)
+    ACHR[b,NEvents := nrow(df)]
+    # print( nrow(df) )
+    
+      
+      # compute the duration of the visit in hours
+      ACHR[b,VisitDuration := difftime(max(lubridate::ymd_hms(df$tStamp)),  min(lubridate::ymd_hms(df$tStamp)), units='hours') ]
+   
+      # compute stuff on each DV in the list
+      for (dv in dv_list){
+        
+        n = threads_to_network_local(df,TN, dv)
+        
+        ACHR[b,paste0(dv,"_complexity") := estimate_network_complexity( n )]
+        ACHR[b,paste0(dv,"_nodes") := nrow(n$nodeDF) ]
+        ACHR[b,paste0(dv,"_edges") := nrow(n$edgeDF) ]  
+        ACHR[b, paste0(dv,"_entropy")  := compute_graph_entropy( df[[dv]] ) ]
+         
+        # print (dv)
+        # print( nrow(n$nodeDF) )
+        # print( length(unique(df[[dv]])))
+        
+      }
+    } # df nrows > 3
+    
+    # Now copy in the rest of data  
+    # this only works because one visit is one bucket
+    ACHR[b,'VisitStart'  :=   as.character(df[1,'tStamp']) ]
+
+    ACHR[b,Visit_ID  := df[1,'Visit_ID']]
+    ACHR[b,Subject_ID  := df[1,'Subject_ID']]
+    ACHR[b,Clinic := df[1,'Clinic']]
+    ACHR[b,LOS_CPT := df[1,'LOS_CPT']]
+    ACHR[b,Procedure := df[1,'Proc']]
+    ACHR[b,Diagnosis := df[1,'Diag']]
+    ACHR[b,NumProcedures := count_procedures(df$Proc[1]) ]
+    ACHR[b,NumDiagnoses := count_diagnoses(df$Diag[1]) ]
+    ACHR[b,Diagnosis_group  := df[1,'Diagnosis_Group']]
+    ACHR[b,Physician  := df[1,'Physician']]
+    ACHR[b,Weekday  := df[1,'Weekday']]
+    ACHR[b,Month  := df[1,'Month']]
+    
+    # Compute the alignment of the context factors
+    # This assumes   CFs = c('Action','Role','Workstation')
+    # print(  ACHR[b,Action_nodes]  )
+    # print(  ACHR[b,Action_Role_Workstation_nodes]  )
+    ACHR[b, 'CF_Alignment' :=   ACHR[b,Action_nodes]  / ACHR[b,Action_Role_Workstation_nodes]  ]
+  
+  } # loop thru buckets
+  
+  # save the  data one last time
+  save(ACHR, file=paste0("visits_ARW_",b,'.Rdata'))
+  
+  # return the table
+  return(ACHR)
+}
+
+
+#####################   ############################################################
+#####################   ############################################################
+#####################   ############################################################
+#####################   ############################################################
+#####################   ############################################################
+#####################   ############################################################
 
 
 # Each bucket is a list of thread numbers that can be used to subset the list of occurrences
@@ -559,7 +726,10 @@ get_timeScale <- function(){'hr'}
 compute_graph_entropy_TEST <- function(s){
   
   # first convert s into text vector
-  text_vector =  concatenate(s) 
+  text_vector =  long_enough( concatenate(s) , 2, ' ')
+ # text_vector =   concatenate(s)  
+  
+ #  if  (length(text_vector)<2) {return(0)}
   
   # get the 2-grams in the sequence s. ng$prop is the proportion of each edge. It sums to 1. 
   p = get.phrasetable(ngram(text_vector,2))[['prop']]
@@ -567,4 +737,80 @@ compute_graph_entropy_TEST <- function(s){
   # return Shannon entropy
   return(-sum(p*log(p)))
    
+}
+# to avoid errors in count_ngrams, make sure the length of each thread in the text_vector tv is longer than the n-gram size, n
+# this gets used in various places so need to pass in the delimiter
+long_enough = function(tv,n,delimiter){
+  
+  return(tv[ unlist(lapply(1:length(tv), function(i) {length(unlist(strsplit(tv[[i]],delimiter)))>=n})) ])
+  
+}
+
+threads_to_network_local <- function(et,TN,CF,grp='threadNum'){
+  
+  # print(head(et))
+  #
+  # print(paste('CF=', CF))
+  # print(paste('grp=', grp))
+  
+  # First get the node names & remove the spaces
+  node_label = levels(factor(et[[CF]]))  # unique(et[[CF]])
+  node_label=str_replace_all(node_label," ","_")
+  nNodes = length(node_label)
+  
+  # print("node_label")
+  # print(node_label)
+  # print(paste('nNodes=', nNodes))
+  
+  node_group=character()
+  for (n in 1:nNodes){
+    # hardcoded threadNum for data.table syntax
+    node_group = c(node_group, as.character(unlist( et[which(et[[CF]]==node_label[n]),threadNum][1]) ) )
+  }
+  
+  # set up the data frames we need to draw the network
+  nodes = data.frame(
+    id = 1:length(node_label),
+    label = node_label,
+    Group = node_group,
+    title=node_label)
+  
+  # get the 2 grams for the edges
+  ngdf = count_ngrams(et,TN, CF, 2)
+  
+  # Adjust the frequency of the edges to 0-1 range
+  ngdf$freq = round(ngdf$freq/max(ngdf$freq),3)
+  
+  # need to split 2-grams into from and to
+  from_to_str = str_split(str_trim(ngdf$ngrams), " ", n=2)
+  
+  # need to find a better way to do this...
+  nEdges = length(from_to_str)
+  # from_labels=matrix(data="", nrow=nEdges,ncol=1)
+  # to_labels =matrix(data="", nrow=nEdges,ncol=1)
+  # from=integer(nEdges)
+  # to=integer(nEdges)
+  # for (i in 1:length(from_to_str)){
+  #   
+  #   # Get from and to by spliting the 2-gram
+  #   from_labels[i] = str_split(from_to_str[[i]]," ")[1]
+  #   to_labels[i] = str_split(from_to_str[[i]]," ")[2]
+  #   
+  #   # use match to lookup the nodeID from the label...
+  #   from[i] = match(from_labels[i], nodes$label)
+  #   to[i] = match(to_labels[i], nodes$label)
+  # }
+  # 
+  # Stopped filtering out selfies July 20, 2019 for  Kerstin Sailer bug  report
+  edges = data.frame(
+    # from,
+    # to,
+    label = ngdf$freq,
+    Value =ngdf$freq) # %>% filter(!from==to)
+  
+  # print(paste("T2N nodes:",nodes))
+  # print(paste("ngdf = :",ngdf))
+  # print(paste("edges= :",edges))
+  
+  return(list(nodeDF = nodes, edgeDF = edges))
 }
