@@ -577,7 +577,7 @@ ACHR_batch_visits_all_CFs <- function(occ,TN, CFs) {
   }
   
   # loop through the buckets. Result will be data frame with one row per bucket
-  for (i in seq(1,N,1)){
+  for (i in seq(N,1,-1)){
     
     b = i #  as.integer(bucket_list[i])
     
